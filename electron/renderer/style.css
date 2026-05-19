@@ -1,0 +1,343 @@
+/* ─── Reset ──────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── Base ───────────────────────────────────────────── */
+:root {
+  --bg: #0d1117;
+  --bg-card: #161b22;
+  --border: #30363d;
+  --text: #c9d1d9;
+  --text-muted: #8b949e;
+  --accent: #58a6ff;
+  --danger: #f85149;
+  --success: #3fb950;
+  --warning: #d2991d;
+  --input-bg: #0d1117;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: "Cascadia Code", "Fira Code", Consolas, monospace;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-app-region: no-drag;
+  overflow: hidden;
+}
+
+/* ─── Container ──────────────────────────────────────── */
+.container {
+  padding: 20px 24px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+/* ─── Header ─────────────────────────────────────────── */
+header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 20px;
+  -webkit-app-region: drag;
+}
+
+header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.5px;
+}
+
+header .subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.running {
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+}
+
+.status-dot.stopped {
+  background: var(--text-muted);
+}
+
+/* ─── Form ───────────────────────────────────────────── */
+#config-form {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+
+.field {
+  margin-bottom: 12px;
+}
+
+.field:last-child {
+  margin-bottom: 0;
+}
+
+.field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: var(--accent);
+}
+
+.field input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.field select {
+  cursor: pointer;
+}
+
+.field select optgroup {
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-style: normal;
+  font-weight: 600;
+}
+
+.field select option {
+  background: var(--bg-card);
+  color: var(--text);
+}
+
+.field-row {
+  display: flex;
+  gap: 12px;
+}
+
+.field-row .field {
+  margin-bottom: 12px;
+}
+
+.flex-1 { flex: 1; }
+.flex-2 { flex: 2; }
+
+/* ─── Buttons ────────────────────────────────────────── */
+.actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.btn {
+  padding: 9px 18px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  font-family: var(--font);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-start {
+  background: var(--success);
+  border-color: var(--success);
+  color: #000;
+  flex: 1;
+}
+
+.btn-start:hover:not(:disabled) {
+  background: #2ea043;
+}
+
+.btn-stop {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  flex: 1;
+}
+
+.btn-stop:hover:not(:disabled) {
+  background: #da3633;
+}
+
+.btn-save {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.btn-save:hover {
+  background: var(--bg-card);
+  border-color: var(--accent);
+}
+
+/* ─── Console ────────────────────────────────────────── */
+.console-container {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.console-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.btn-clear {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-family: var(--font);
+}
+
+.btn-clear:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.console-output {
+  height: 260px;
+  overflow-y: auto;
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.console-output .stderr {
+  color: var(--danger);
+}
+
+.console-output .stdout {
+  color: var(--text);
+}
+
+.console-output .system {
+  color: var(--accent);
+}
+
+.console-output .chat-user {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.console-output .chat-bot {
+  color: var(--success);
+}
+
+/* ─── Chat Bar ────────────────────────────────────────── */
+.chat-bar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.chat-input {
+  flex: 1;
+  padding: 7px 10px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: var(--font);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.chat-input:focus {
+  border-color: var(--accent);
+}
+
+.chat-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.chat-input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-send {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #000;
+  font-size: 12px;
+  padding: 7px 14px;
+}
+
+.btn-send:hover:not(:disabled) {
+  background: #79c0ff;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────── */
+.console-output::-webkit-scrollbar {
+  width: 6px;
+}
+
+.console-output::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.console-output::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}

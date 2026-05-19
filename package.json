@@ -1,0 +1,79 @@
+{
+  "name": "aimc",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AI Minecraft Companion — real-time AI teammate system",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js",
+    "electron": "electron .",
+    "electron:dist": "electron-builder --win dir",
+    "postinstall": "patch-package",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@cerebras/cerebras_cloud_sdk": "^1.5.0",
+    "@google/genai": "^0.8.0",
+    "@huggingface/inference": "^2.8.0",
+    "@mistralai/mistralai": "^1.5.0",
+    "@xenova/transformers": "^2.17.2",
+    "cheerio": "^1.0.0",
+    "chromadb": "^1.10.0",
+    "eslint": "^10.4.0",
+    "eslint-plugin-no-floating-promise": "^2.0.0",
+    "express": "^4.21.0",
+    "globals": "^17.6.0",
+    "google-translate-api-x": "^10.7.0",
+    "groq-sdk": "^0.8.0",
+    "minecraft-assets": "^1.8.0",
+    "minecraft-data": "^3.70.0",
+    "mineflayer": "^4.23.0",
+    "mineflayer-armor-manager": "^2.0.0",
+    "mineflayer-auto-eat": "^3.3.0",
+    "mineflayer-collectblock": "^1.4.0",
+    "mineflayer-pathfinder": "^2.4.0",
+    "mineflayer-pvp": "^1.3.0",
+    "open": "^10.1.0",
+    "openai": "^4.73.0",
+    "prismarine-item": "^1.15.0",
+    "replicate": "^0.34.0",
+    "ses": "^1.3.0",
+    "socket.io": "^4.8.0",
+    "socket.io-client": "^4.8.0",
+    "sql.js": "^1.11.0",
+    "vec3": "^0.1.10",
+    "yargs": "^17.7.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.0",
+    "patch-package": "^8.0.0",
+    "typescript": "^5.6.0"
+  },
+  "build": {
+    "appId": "com.aimc.launcher",
+    "productName": "AIMC Launcher",
+    "files": [
+      "electron/**/*",
+      "src/legacy/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
+    "win": {
+      "target": "dir",
+      "icon": null
+    }
+  },
+  "overrides": {}
+}

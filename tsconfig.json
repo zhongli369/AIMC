@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "allowJs": true,
+    "checkJs": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "allowImportingTsExtensions": false,
+    "paths": {
+      "@interfaces/*": ["./src/interfaces/*"],
+      "@runtime/*": ["./src/runtime/*"],
+      "@minecraft/*": ["./src/minecraft/*"],
+      "@agent/*": ["./src/agent/*"],
+      "@llm/*": ["./src/llm/*"],
+      "@voice/*": ["./src/voice/*"],
+      "@memory/*": ["./src/memory/*"],
+      "@config/*": ["./src/config/*"],
+      "@legacy/*": ["./src/legacy/*"]
+    },
+    "baseUrl": "."
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "src/legacy", "electron"]
+}
