@@ -1,0 +1,70 @@
+{
+  "$schema": "aimc-voice-profile-v1",
+  "version": "1.0.0",
+  "description": "Per-role voice profiles for TTS narration. Maps to CompanionRole voiceStyle in role-identity.ts.",
+
+  "defaultProfile": "balanced",
+
+  "profiles": {
+    "miner": {
+      "role": "miner",
+      "voiceStyle": "practical",
+      "tts": {
+        "pitch": "-2Hz",
+        "rate": "+0%",
+        "volume": "+0%",
+        "style": "general"
+      },
+      "narrationPacing": 1.0,
+      "pauseBetweenUtterancesMs": 200
+    },
+    "fighter": {
+      "role": "fighter",
+      "voiceStyle": "direct",
+      "tts": {
+        "pitch": "+2Hz",
+        "rate": "+15%",
+        "volume": "+10%",
+        "style": "general"
+      },
+      "narrationPacing": 0.8,
+      "pauseBetweenUtterancesMs": 100
+    },
+    "scout": {
+      "role": "scout",
+      "voiceStyle": "curious",
+      "tts": {
+        "pitch": "+5Hz",
+        "rate": "+5%",
+        "volume": "+0%",
+        "style": "general"
+      },
+      "narrationPacing": 1.1,
+      "pauseBetweenUtterancesMs": 250
+    },
+    "support": {
+      "role": "support",
+      "voiceStyle": "calm",
+      "tts": {
+        "pitch": "-3Hz",
+        "rate": "-5%",
+        "volume": "+0%",
+        "style": "general"
+      },
+      "narrationPacing": 0.9,
+      "pauseBetweenUtterancesMs": 150
+    },
+    "balanced": {
+      "role": "balanced",
+      "voiceStyle": "versatile",
+      "tts": {
+        "pitch": "+0Hz",
+        "rate": "+0%",
+        "volume": "+0%",
+        "style": "general"
+      },
+      "narrationPacing": 1.0,
+      "pauseBetweenUtterancesMs": 180
+    }
+  }
+}

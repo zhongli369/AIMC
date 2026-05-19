@@ -78,20 +78,20 @@ async function run() {
     test("Token budget under 4000", ctx.estimatedTokens < 4000, `${ctx.estimatedTokens} tokens used`);
     test("System prompt under 2500 tokens", estimateTokens(buildSystemPrompt()) < 2500);
     test("Correct message structure", ctx.messages.length >= 3);
-    // ── Test 5: RuntimeCore emergency ─────────────────
-    console.log("=== Test 5: RuntimeCore Emergency ===");
+    // ── Test 5: RuntimeCore validation (schema + safety gate) ─
+    console.log("=== Test 5: RuntimeCore Validation ===");
     const core = new RuntimeCore();
     core.start();
-    const r1 = await core.processAgentOutput({
+    const r1 = core.validate({
         speech: { text: "Normal operation", tone: "friendly" },
         actions: [{
                 id: "act-1", type: "speak_chat",
                 target: { text: "Hello!" }, priority: 2, reason: "Test",
             }],
     });
-    test("Normal processing works", r1.results.length > 0);
+    test("Normal validation passes", r1.output !== null && r1.output.actions.length > 0);
     core.emergencyStop("test emergency");
-    const r2 = await core.processAgentOutput({
+    const r2 = core.validate({
         actions: [{
                 id: "blocked", type: "attack_entity",
                 target: { entityName: "zombie" }, priority: 3, reason: "Should be blocked",

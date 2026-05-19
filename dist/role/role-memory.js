@@ -1,0 +1,101 @@
+/**
+ * RoleMemory — lightweight JSON persistence for role identity.
+ *
+ * Saves/Loads CompanionIdentity to/from a JSON file.
+ * Safe fallback defaults if file is missing or corrupt.
+ *
+ * NO database dependency. Designed for single-bot use.
+ */
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { createIdentity } from "./role-identity.js";
+// ─── Config ──────────────────────────────────────────
+const DEFAULT_FILENAME = "aimc_role_identity.json";
+// ─── Save ────────────────────────────────────────────
+/**
+ * Persist companion identity to a JSON file.
+ * Creates the data directory if it doesn't exist.
+ */
+export function saveIdentity(identity, config) {
+    try {
+        const dir = config.dataDir;
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        const filePath = path.join(dir, config.filename ?? DEFAULT_FILENAME);
+        // Write to temp file first, then rename (atomic write)
+        const tmpPath = filePath + ".tmp";
+        const json = JSON.stringify(identity, null, 2);
+        fs.writeFileSync(tmpPath, json, "utf-8");
+        fs.renameSync(tmpPath, filePath);
+    }
+    catch (err) {
+        console.warn("[RoleMemory] Failed to save identity:", err.message);
+    }
+}
+// ─── Load ────────────────────────────────────────────
+/**
+ * Load companion identity from a JSON file.
+ * Returns a default identity if file is missing, corrupt, or has invalid data.
+ */
+export function loadIdentity(config, fallbackRole = "balanced") {
+    try {
+        const filePath = path.join(config.dataDir, config.filename ?? DEFAULT_FILENAME);
+        if (!fs.existsSync(filePath)) {
+            console.log("[RoleMemory] No saved identity found — using default");
+            return createIdentity(fallbackRole);
+        }
+        const raw = fs.readFileSync(filePath, "utf-8");
+        const parsed = JSON.parse(raw);
+        // Validate required fields
+        if (!parsed.currentRole || !parsed.confidence || !parsed.roleHistory) {
+            console.warn("[RoleMemory] Corrupt identity file — using default");
+            return createIdentity(fallbackRole);
+        }
+        // Validate role value
+        const validRoles = ["miner", "fighter", "scout", "support", "balanced"];
+        if (!validRoles.includes(parsed.currentRole)) {
+            console.warn(`[RoleMemory] Invalid role "${parsed.currentRole}" — using default`);
+            return createIdentity(fallbackRole);
+        }
+        // Ensure all fields exist with defaults for missing ones
+        const identity = {
+            currentRole: parsed.currentRole,
+            confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.3,
+            roleHistory: Array.isArray(parsed.roleHistory) ? parsed.roleHistory : [],
+            dominantTraits: Array.isArray(parsed.dominantTraits) ? parsed.dominantTraits : [],
+            createdAt: typeof parsed.createdAt === "number" ? parsed.createdAt : Date.now(),
+            updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : Date.now(),
+        };
+        console.log(`[RoleMemory] Loaded identity: ${identity.currentRole} (confidence: ${(identity.confidence * 100).toFixed(0)}%, ${identity.roleHistory.length} history entries)`);
+        return identity;
+    }
+    catch (err) {
+        console.warn("[RoleMemory] Failed to load identity:", err.message);
+        return createIdentity(fallbackRole);
+    }
+}
+// ─── Auto-Save ───────────────────────────────────────
+/**
+ * Create an auto-save wrapper that periodically persists identity.
+ * Returns a cleanup function to stop auto-save.
+ */
+export function createAutoSave(getIdentity, config, intervalMs = 60_000) {
+    const timer = setInterval(() => {
+        try {
+            saveIdentity(getIdentity(), config);
+        }
+        catch {
+            // Silently ignore — don't spam on save failure
+        }
+    }, intervalMs);
+    // Save immediately on creation
+    try {
+        saveIdentity(getIdentity(), config);
+    }
+    catch {
+        // Ignore
+    }
+    return () => clearInterval(timer);
+}
+//# sourceMappingURL=role-memory.js.map

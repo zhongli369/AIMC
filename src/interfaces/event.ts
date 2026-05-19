@@ -77,7 +77,8 @@ export type SystemEventType =
   | "bot_spawned"
   | "bot_kicked"
   | "rate_limit_hit"
-  | "safety_block";
+  | "safety_block"
+  | "arch_violation";
 
 // ─── Memory Event Types ──────────────────────────────────────
 

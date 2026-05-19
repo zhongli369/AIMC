@@ -67,6 +67,7 @@ export class HeuristicEngine {
             category: "survival",
             reason: `Health critically low (${Math.round(healthPct)}%) with ${nearby.hostiles.length} hostile(s) nearby`,
             output: {
+                intent: "chat",
                 actions: [{
                         id: `heuristic-flee-${Date.now()}`,
                         type: "flee",
@@ -88,6 +89,7 @@ export class HeuristicEngine {
             category: "survival",
             reason: `Immediate danger: ${nearby.projectiles.length > 0 ? "projectiles inbound" : "creeper/TNT nearby"}`,
             output: {
+                intent: "chat",
                 actions: [{
                         id: `heuristic-dodge-${Date.now()}`,
                         type: "flee",
@@ -110,6 +112,7 @@ export class HeuristicEngine {
             category: "survival",
             reason: `Hunger low (${botState.food}/20), food available in inventory`,
             output: {
+                intent: "chat",
                 actions: [{
                         id: `heuristic-eat-${Date.now()}`,
                         type: "consume",
@@ -137,6 +140,7 @@ export class HeuristicEngine {
             category: "utility",
             reason: `Light level low (${lightLevel}), torch available`,
             output: {
+                intent: "chat",
                 actions: [{
                         id: `heuristic-torch-${Date.now()}`,
                         type: "place_block",
@@ -171,6 +175,7 @@ export class HeuristicEngine {
             category: "utility",
             reason: `Player${farPlayers.length > 1 ? "s" : ""} more than ${this.config.followTriggerDistance}m away`,
             output: {
+                intent: "chat",
                 actions: [{
                         id: `heuristic-follow-${Date.now()}`,
                         type: "follow_player",
@@ -200,6 +205,7 @@ export class HeuristicEngine {
             category: "utility",
             reason: `${inRange.length} item(s) within pickup range`,
             output: {
+                intent: "chat",
                 actions: [{
                         id: `heuristic-pickup-${Date.now()}`,
                         type: "collect_nearby_items",

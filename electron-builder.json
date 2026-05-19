@@ -1,0 +1,65 @@
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "com.aimc.mcp",
+  "productName": "AIMC Launcher",
+  "copyright": "AIMC Project",
+
+  "directories": {
+    "output": "release"
+  },
+
+  "files": [
+    "dist/**/*",
+    "electron/**/*",
+    "config/**/*",
+    "package.json"
+  ],
+
+  "asar": true,
+
+  "extraResources": [
+    {
+      "from": "config",
+      "to": "config"
+    },
+    {
+      "from": "electron/renderer/ui/voice-profile.json",
+      "to": "voice-profile.json"
+    }
+  ],
+
+  "win": {
+    "target": "dir",
+    "icon": null,
+    "signAndEditExecutable": false
+  },
+
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "AIMC Launcher"
+  },
+
+  "portable": {
+    "artifactName": "AIMC_Launcher_${version}_portable.exe"
+  },
+
+  "mac": {
+    "target": "dmg",
+    "category": "public.app-category.games",
+    "artifactName": "AIMC_Launcher_${version}_${arch}.${ext}"
+  },
+
+  "linux": {
+    "target": "AppImage",
+    "category": "Game",
+    "artifactName": "AIMC_Launcher_${version}_${arch}.${ext}"
+  },
+
+  "electronDownload": {
+    "mirror": "https://npmmirror.com/mirrors/electron/"
+  }
+}

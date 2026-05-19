@@ -15,6 +15,10 @@ import { Coordinator } from "./coordination/index.js";
 import { PerformanceProfiler, TokenTracker } from "./performance/index.js";
 import { HeuristicEngine } from "./heuristics/index.js";
 import { Watchdog, RecoveryManager } from "./recovery/index.js";
+import { SkillRouter, SkillRegistry } from "./skill/index.js";
+import { RoleAdaptationEngine } from "./role/index.js";
+import { RelationshipEngine, SharedExperienceTimeline, MemoryCallbackGenerator } from "./memory/index.js";
+import { UIStateBridge } from "./ui/state-bridge.js";
 export declare const runtimeCore: RuntimeCore;
 export declare function initAgent(deepseekConfig: DeepSeekConfig): AgentCore;
 export declare function getAgent(): AgentCore | null;
@@ -43,6 +47,37 @@ export declare function initPersonality(params?: {
     tasks: TaskPlanner;
     coordinator: Coordinator;
 };
+/** Initialize Phase 2 skill system. */
+export declare function initSkill(): {
+    router: SkillRouter;
+    registry: SkillRegistry;
+};
+export declare function getSkill(): {
+    router: SkillRouter | null;
+    registry: SkillRegistry | null;
+};
+/** Initialize Phase 4-D role specialization system. */
+export declare function initRole(params?: {
+    dataDir?: string;
+    initialRole?: import("./role/index.js").CompanionRole;
+    autoSaveIntervalMs?: number;
+}): RoleAdaptationEngine;
+export declare function getRole(): RoleAdaptationEngine | null;
+/** Initialize Phase 4-E relationship + shared experience system. */
+export declare function initRelationship(params?: {
+    dataDir?: string;
+    autoSaveIntervalMs?: number;
+    language?: "zh" | "en";
+}): {
+    relationship: RelationshipEngine;
+    experiences: SharedExperienceTimeline;
+    callbacks: MemoryCallbackGenerator;
+};
+export declare function getRelationship(): {
+    relationship: RelationshipEngine | null;
+    experiences: SharedExperienceTimeline | null;
+    callbacks: MemoryCallbackGenerator | null;
+};
 export declare function getPersonality(): {
     personality: PersonalityEngine | null;
     emotion: EmotionEngine | null;
@@ -51,6 +86,11 @@ export declare function getPersonality(): {
     tasks: TaskPlanner | null;
     coordinator: Coordinator | null;
 };
+/** Initialize P1 UI state bridge — telemetry → Electron IPC. */
+export declare function initUI(params?: {
+    intervalMs?: number;
+}): UIStateBridge;
+export declare function getUIBridge(): UIStateBridge | null;
 /** Initialize all productionization systems: performance, heuristics, recovery. */
 export declare function initProduction(params?: {
     profilerEnabled?: boolean;

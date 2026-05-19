@@ -123,9 +123,9 @@ export declare const IntentActionSchema: z.ZodEffects<z.ZodObject<{
     } | {
         text: string;
     } | {};
-    id: string;
-    priority: number;
     reason: string;
+    priority: number;
+    id: string;
     timeout?: number | undefined;
     cancelable?: boolean | undefined;
 }, {
@@ -156,9 +156,9 @@ export declare const IntentActionSchema: z.ZodEffects<z.ZodObject<{
     } | {
         text: string;
     } | {};
-    id: string;
-    priority: number;
     reason: string;
+    priority: number;
+    id: string;
     timeout?: number | undefined;
     cancelable?: boolean | undefined;
 }>, {
@@ -189,9 +189,9 @@ export declare const IntentActionSchema: z.ZodEffects<z.ZodObject<{
     } | {
         text: string;
     } | {};
-    id: string;
-    priority: number;
     reason: string;
+    priority: number;
+    id: string;
     timeout?: number | undefined;
     cancelable?: boolean | undefined;
 }, {
@@ -222,9 +222,9 @@ export declare const IntentActionSchema: z.ZodEffects<z.ZodObject<{
     } | {
         text: string;
     } | {};
-    id: string;
-    priority: number;
     reason: string;
+    priority: number;
+    id: string;
     timeout?: number | undefined;
     cancelable?: boolean | undefined;
 }>;
@@ -241,7 +241,53 @@ declare const SpeechIntentSchema: z.ZodObject<{
     tone: "neutral" | "friendly" | "urgent" | "excited" | "concerned";
     target?: string | undefined;
 }>;
-export declare const AgentOutputSchema: z.ZodObject<{
+export declare const AgentOutputSchema: z.ZodEffects<z.ZodObject<{
+    intent: z.ZodEnum<["chat", "skill", "plan"]>;
+    skill: z.ZodOptional<z.ZodObject<{
+        name: z.ZodString;
+        params: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
+    }, "strip", z.ZodTypeAny, {
+        name: string;
+        params?: Record<string, unknown> | undefined;
+    }, {
+        name: string;
+        params?: Record<string, unknown> | undefined;
+    }>>;
+    plan: z.ZodOptional<z.ZodObject<{
+        goal: z.ZodString;
+        steps: z.ZodArray<z.ZodObject<{
+            step: z.ZodNumber;
+            action: z.ZodString;
+            skill: z.ZodOptional<z.ZodString>;
+            params: z.ZodRecord<z.ZodString, z.ZodUnknown>;
+        }, "strip", z.ZodTypeAny, {
+            params: Record<string, unknown>;
+            action: string;
+            step: number;
+            skill?: string | undefined;
+        }, {
+            params: Record<string, unknown>;
+            action: string;
+            step: number;
+            skill?: string | undefined;
+        }>, "many">;
+    }, "strip", z.ZodTypeAny, {
+        goal: string;
+        steps: {
+            params: Record<string, unknown>;
+            action: string;
+            step: number;
+            skill?: string | undefined;
+        }[];
+    }, {
+        goal: string;
+        steps: {
+            params: Record<string, unknown>;
+            action: string;
+            step: number;
+            skill?: string | undefined;
+        }[];
+    }>>;
     speech: z.ZodOptional<z.ZodObject<{
         text: z.ZodString;
         tone: z.ZodEnum<["neutral", "friendly", "urgent", "excited", "concerned"]>;
@@ -374,9 +420,9 @@ export declare const AgentOutputSchema: z.ZodObject<{
         } | {
             text: string;
         } | {};
-        id: string;
-        priority: number;
         reason: string;
+        priority: number;
+        id: string;
         timeout?: number | undefined;
         cancelable?: boolean | undefined;
     }, {
@@ -407,9 +453,9 @@ export declare const AgentOutputSchema: z.ZodObject<{
         } | {
             text: string;
         } | {};
-        id: string;
-        priority: number;
         reason: string;
+        priority: number;
+        id: string;
         timeout?: number | undefined;
         cancelable?: boolean | undefined;
     }>, {
@@ -440,9 +486,9 @@ export declare const AgentOutputSchema: z.ZodObject<{
         } | {
             text: string;
         } | {};
-        id: string;
-        priority: number;
         reason: string;
+        priority: number;
+        id: string;
         timeout?: number | undefined;
         cancelable?: boolean | undefined;
     }, {
@@ -473,9 +519,9 @@ export declare const AgentOutputSchema: z.ZodObject<{
         } | {
             text: string;
         } | {};
-        id: string;
-        priority: number;
         reason: string;
+        priority: number;
+        id: string;
         timeout?: number | undefined;
         cancelable?: boolean | undefined;
     }>, "many">;
@@ -489,14 +535,14 @@ export declare const AgentOutputSchema: z.ZodObject<{
         type: "event" | "location" | "relationship" | "failure" | "success" | "preference";
         summary: string;
         importance: number;
-        emotionalValence?: number | undefined;
         tags?: string[] | undefined;
+        emotionalValence?: number | undefined;
     }, {
         type: "event" | "location" | "relationship" | "failure" | "success" | "preference";
         summary: string;
         importance: number;
-        emotionalValence?: number | undefined;
         tags?: string[] | undefined;
+        emotionalValence?: number | undefined;
     }>>;
     task_update: z.ZodOptional<z.ZodObject<{
         taskId: z.ZodOptional<z.ZodString>;
@@ -525,6 +571,7 @@ export declare const AgentOutputSchema: z.ZodObject<{
         energy?: number | undefined;
     }>>;
 }, "strip", z.ZodTypeAny, {
+    intent: "chat" | "skill" | "plan";
     actions: {
         type: "move_to" | "follow_player" | "move_away_from" | "go_to_surface" | "dig_down" | "stay" | "mine_block" | "place_block" | "collect_block" | "use_block" | "attack_entity" | "defend_self" | "flee" | "equip_item" | "drop_item" | "consume" | "give_to_player" | "open_container" | "store_item" | "take_item" | "craft_item" | "smelt_item" | "speak_chat" | "speak_whisper" | "look_at_player" | "look_at_position" | "sleep" | "wait" | "collect_nearby_items" | "use_door" | "place_torch";
         target: {
@@ -553,12 +600,25 @@ export declare const AgentOutputSchema: z.ZodObject<{
         } | {
             text: string;
         } | {};
-        id: string;
-        priority: number;
         reason: string;
+        priority: number;
+        id: string;
         timeout?: number | undefined;
         cancelable?: boolean | undefined;
     }[];
+    skill?: {
+        name: string;
+        params?: Record<string, unknown> | undefined;
+    } | undefined;
+    plan?: {
+        goal: string;
+        steps: {
+            params: Record<string, unknown>;
+            action: string;
+            step: number;
+            skill?: string | undefined;
+        }[];
+    } | undefined;
     speech?: {
         text: string;
         tone: "neutral" | "friendly" | "urgent" | "excited" | "concerned";
@@ -568,8 +628,8 @@ export declare const AgentOutputSchema: z.ZodObject<{
         type: "event" | "location" | "relationship" | "failure" | "success" | "preference";
         summary: string;
         importance: number;
-        emotionalValence?: number | undefined;
         tags?: string[] | undefined;
+        emotionalValence?: number | undefined;
     } | undefined;
     task_update?: {
         action: "start" | "complete" | "fail" | "pause" | "resume" | "cancel";
@@ -582,6 +642,7 @@ export declare const AgentOutputSchema: z.ZodObject<{
         energy?: number | undefined;
     } | undefined;
 }, {
+    intent: "chat" | "skill" | "plan";
     actions: {
         type: "move_to" | "follow_player" | "move_away_from" | "go_to_surface" | "dig_down" | "stay" | "mine_block" | "place_block" | "collect_block" | "use_block" | "attack_entity" | "defend_self" | "flee" | "equip_item" | "drop_item" | "consume" | "give_to_player" | "open_container" | "store_item" | "take_item" | "craft_item" | "smelt_item" | "speak_chat" | "speak_whisper" | "look_at_player" | "look_at_position" | "sleep" | "wait" | "collect_nearby_items" | "use_door" | "place_torch";
         target: {
@@ -610,12 +671,25 @@ export declare const AgentOutputSchema: z.ZodObject<{
         } | {
             text: string;
         } | {};
-        id: string;
-        priority: number;
         reason: string;
+        priority: number;
+        id: string;
         timeout?: number | undefined;
         cancelable?: boolean | undefined;
     }[];
+    skill?: {
+        name: string;
+        params?: Record<string, unknown> | undefined;
+    } | undefined;
+    plan?: {
+        goal: string;
+        steps: {
+            params: Record<string, unknown>;
+            action: string;
+            step: number;
+            skill?: string | undefined;
+        }[];
+    } | undefined;
     speech?: {
         text: string;
         tone: "neutral" | "friendly" | "urgent" | "excited" | "concerned";
@@ -625,8 +699,150 @@ export declare const AgentOutputSchema: z.ZodObject<{
         type: "event" | "location" | "relationship" | "failure" | "success" | "preference";
         summary: string;
         importance: number;
-        emotionalValence?: number | undefined;
         tags?: string[] | undefined;
+        emotionalValence?: number | undefined;
+    } | undefined;
+    task_update?: {
+        action: "start" | "complete" | "fail" | "pause" | "resume" | "cancel";
+        reason?: string | undefined;
+        taskId?: string | undefined;
+    } | undefined;
+    internal_state?: {
+        mood?: string | undefined;
+        confidence?: number | undefined;
+        energy?: number | undefined;
+    } | undefined;
+}>, {
+    intent: "chat" | "skill" | "plan";
+    actions: {
+        type: "move_to" | "follow_player" | "move_away_from" | "go_to_surface" | "dig_down" | "stay" | "mine_block" | "place_block" | "collect_block" | "use_block" | "attack_entity" | "defend_self" | "flee" | "equip_item" | "drop_item" | "consume" | "give_to_player" | "open_container" | "store_item" | "take_item" | "craft_item" | "smelt_item" | "speak_chat" | "speak_whisper" | "look_at_player" | "look_at_position" | "sleep" | "wait" | "collect_nearby_items" | "use_door" | "place_torch";
+        target: {
+            x: number;
+            y: number;
+            z: number;
+        } | {
+            entityName: string;
+            entityType?: string | undefined;
+            maxDistance?: number | undefined;
+        } | {
+            playerName: string;
+        } | {
+            blockType: string;
+            count?: number | undefined;
+            position?: {
+                x: number;
+                y: number;
+                z: number;
+            } | undefined;
+        } | {
+            itemName: string;
+            count?: number | undefined;
+            sourceContainer?: string | undefined;
+            destContainer?: string | undefined;
+        } | {
+            text: string;
+        } | {};
+        reason: string;
+        priority: number;
+        id: string;
+        timeout?: number | undefined;
+        cancelable?: boolean | undefined;
+    }[];
+    skill?: {
+        name: string;
+        params?: Record<string, unknown> | undefined;
+    } | undefined;
+    plan?: {
+        goal: string;
+        steps: {
+            params: Record<string, unknown>;
+            action: string;
+            step: number;
+            skill?: string | undefined;
+        }[];
+    } | undefined;
+    speech?: {
+        text: string;
+        tone: "neutral" | "friendly" | "urgent" | "excited" | "concerned";
+        target?: string | undefined;
+    } | undefined;
+    memory_save?: {
+        type: "event" | "location" | "relationship" | "failure" | "success" | "preference";
+        summary: string;
+        importance: number;
+        tags?: string[] | undefined;
+        emotionalValence?: number | undefined;
+    } | undefined;
+    task_update?: {
+        action: "start" | "complete" | "fail" | "pause" | "resume" | "cancel";
+        reason?: string | undefined;
+        taskId?: string | undefined;
+    } | undefined;
+    internal_state?: {
+        mood?: string | undefined;
+        confidence?: number | undefined;
+        energy?: number | undefined;
+    } | undefined;
+}, {
+    intent: "chat" | "skill" | "plan";
+    actions: {
+        type: "move_to" | "follow_player" | "move_away_from" | "go_to_surface" | "dig_down" | "stay" | "mine_block" | "place_block" | "collect_block" | "use_block" | "attack_entity" | "defend_self" | "flee" | "equip_item" | "drop_item" | "consume" | "give_to_player" | "open_container" | "store_item" | "take_item" | "craft_item" | "smelt_item" | "speak_chat" | "speak_whisper" | "look_at_player" | "look_at_position" | "sleep" | "wait" | "collect_nearby_items" | "use_door" | "place_torch";
+        target: {
+            x: number;
+            y: number;
+            z: number;
+        } | {
+            entityName: string;
+            entityType?: string | undefined;
+            maxDistance?: number | undefined;
+        } | {
+            playerName: string;
+        } | {
+            blockType: string;
+            count?: number | undefined;
+            position?: {
+                x: number;
+                y: number;
+                z: number;
+            } | undefined;
+        } | {
+            itemName: string;
+            count?: number | undefined;
+            sourceContainer?: string | undefined;
+            destContainer?: string | undefined;
+        } | {
+            text: string;
+        } | {};
+        reason: string;
+        priority: number;
+        id: string;
+        timeout?: number | undefined;
+        cancelable?: boolean | undefined;
+    }[];
+    skill?: {
+        name: string;
+        params?: Record<string, unknown> | undefined;
+    } | undefined;
+    plan?: {
+        goal: string;
+        steps: {
+            params: Record<string, unknown>;
+            action: string;
+            step: number;
+            skill?: string | undefined;
+        }[];
+    } | undefined;
+    speech?: {
+        text: string;
+        tone: "neutral" | "friendly" | "urgent" | "excited" | "concerned";
+        target?: string | undefined;
+    } | undefined;
+    memory_save?: {
+        type: "event" | "location" | "relationship" | "failure" | "success" | "preference";
+        summary: string;
+        importance: number;
+        tags?: string[] | undefined;
+        emotionalValence?: number | undefined;
     } | undefined;
     task_update?: {
         action: "start" | "complete" | "fail" | "pause" | "resume" | "cancel";

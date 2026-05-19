@@ -20,6 +20,7 @@ const DEFAULT_CONFIG = {
 };
 // ─── Fallback Idle Intent ────────────────────────────
 export const FALLBACK_IDLE_OUTPUT = {
+    intent: "chat",
     actions: [
         {
             id: "fallback-idle",

@@ -1,15 +1,17 @@
 /**
- * RuntimeCore — central orchestrator for the AIMC runtime pipeline.
+ * RuntimeCore — validation gate for the AIMC runtime pipeline.
  *
- * Pipeline: AgentOutput JSON → Schema Validation → SafetyGuard → ActionDispatcher → Results
+ * Pipeline: AgentOutput JSON → Schema Validation → SafetyGuard → ValidatedOutput
  *
- * This is the ONLY entry point for LLM outputs to reach Minecraft actions.
- * No LLM may bypass this pipeline.
+ * RuntimeCore ONLY validates. It does NOT execute actions.
+ * All execution flows through SkillRouter → ActionDispatcher → Mineflayer.
+ *
+ * This is the ONLY entry point for LLM outputs to be validated.
+ * No LLM may bypass schema + safety validation.
  */
 import type { AgentOutput, IntentAction, ExecutionResult, ValidationError } from "../interfaces/intent.js";
 import { validateAgentOutput, type SchemaValidationResult } from "./intent-schema.js";
 import { SafetyGuard } from "./safety-guard.js";
-import { ActionDispatcher } from "./action-dispatcher.js";
 import { eventBus } from "./event-bus.js";
 import { logger } from "./logger.js";
 
@@ -32,20 +34,27 @@ export interface RuntimeStats {
   emergencyReason: string | null;
 }
 
-// ─── Pipeline Result ─────────────────────────────────
+// ─── Validation Result ───────────────────────────────
 
-export interface PipelineResult {
+export interface ValidationResult {
   success: boolean;
-  results: ExecutionResult[];
+  /** Validated + safety-filtered AgentOutput (null if schema failed) */
+  output: AgentOutput | null;
   schemaResult: SchemaValidationResult;
+  /** Intents that failed safety validation */
   rejectedIntents: { intent: IntentAction; errors: ValidationError[] }[];
+  /** Speech extracted from output (pass-through even if no actions) */
+  speech: AgentOutput["speech"];
+  /** Memory save candidate from LLM output */
+  memorySave: AgentOutput["memory_save"];
+  /** Task update from LLM output */
+  taskUpdate: AgentOutput["task_update"];
 }
 
 // ─── RuntimeCore ─────────────────────────────────────
 
 export class RuntimeCore {
   private safety: SafetyGuard;
-  private dispatcher: ActionDispatcher | null = null;
   private state: RuntimeState = "init";
   private startedAt: number = 0;
 
@@ -67,21 +76,21 @@ export class RuntimeCore {
 
   // ─── Lifecycle ─────────────────────────────────────
 
-  setDispatcher(dispatcher: ActionDispatcher): void {
-    this.dispatcher = dispatcher;
-    this.safety.setBot((dispatcher as any).bot);
+  /** Set the bot reference on SafetyGuard (needed for state-aware safety checks). */
+  setBot(bot: any): void {
+    this.safety.setBot(bot);
   }
 
   start(): void {
     this.state = "running";
     this.startedAt = Date.now();
     logger.intentReceived({ id: "__runtime_start__", type: "__system__", target: {}, priority: 1, reason: "Runtime started" } as any);
-    console.log("[RuntimeCore] Pipeline running — LLM intents will be validated and dispatched.");
+    console.log("[RuntimeCore] Validation pipeline running — schema + safety gate active.");
   }
 
   pause(): void {
     this.state = "paused";
-    console.log("[RuntimeCore] Runtime paused — intents will be queued but not executed.");
+    console.log("[RuntimeCore] Runtime paused — validation continues but intents flagged as paused.");
   }
 
   resume(): void {
@@ -98,8 +107,6 @@ export class RuntimeCore {
       reason,
       allActionsBlocked: true,
     });
-    // Cancel all pending actions
-    this.dispatcher?.cancelPending();
   }
 
   clearEmergency(): void {
@@ -109,24 +116,24 @@ export class RuntimeCore {
 
   shutdown(): void {
     this.state = "shutdown";
-    this.dispatcher?.cancelPending();
     console.log("[RuntimeCore] Shutdown complete.");
   }
 
-  // ─── Main Pipeline ─────────────────────────────────
-  // This is THE method that processes all LLM output.
+  // ─── Validation Pipeline ───────────────────────────
+  // This is THE method that validates all LLM output.
+  // It does NOT execute — SkillRouter handles execution.
 
   /**
-   * Process an AgentOutput from any LLM.
+   * Validate an AgentOutput from any LLM.
    *
    * Pipeline:
    * 1. Schema validation (Zod) — reject malformed JSON
    * 2. Safety validation per intent — reject dangerous actions
-   * 3. Dispatch valid intents through ActionDispatcher
    *
-   * Returns a PipelineResult with the outcome of every intent.
+   * Returns a ValidationResult with the validated + safety-filtered output.
+   * Execution is handled downstream by SkillRouter.
    */
-  async processAgentOutput(rawJson: unknown): Promise<PipelineResult> {
+  validate(rawJson: unknown): ValidationResult {
     const startTime = Date.now();
     this.intentsReceived++;
 
@@ -153,19 +160,21 @@ export class RuntimeCore {
 
       return {
         success: false,
-        results: [],
+        output: null,
         schemaResult,
         rejectedIntents: [],
+        speech: undefined,
+        memorySave: undefined,
+        taskUpdate: undefined,
       };
     }
 
     // Zod validated — safe to cast to our interface types
     const agentOutput = schemaResult.data as unknown as AgentOutput;
-    const rejectedIntents: PipelineResult["rejectedIntents"] = [];
-    const results: ExecutionResult[] = [];
+    const rejectedIntents: ValidationResult["rejectedIntents"] = [];
     let hasFailures = false;
 
-    // ═══ STAGE 2: Process Speech (pass-through, no execution) ═══
+    // ═══ STAGE 2: Process Speech (pass-through) ═══
     if (agentOutput.speech) {
       eventBus.emit("agent", "decision_made", {
         speech: agentOutput.speech,
@@ -173,7 +182,9 @@ export class RuntimeCore {
       });
     }
 
-    // ═══ STAGE 3: Validate + Dispatch Each Intent ═══
+    // ═══ STAGE 3: Safety Validate Each Intent ═══
+    const validatedActions: IntentAction[] = [];
+
     for (const intent of agentOutput.actions) {
       if (this.state === "emergency" || this.state === "shutdown") {
         rejectedIntents.push({
@@ -190,14 +201,11 @@ export class RuntimeCore {
       }
 
       if (this.state === "paused") {
-        // Paused: don't reject, but don't execute either
-        // In a full implementation, these would be queued
         continue;
       }
 
       // Log intent received
       logger.intentReceived(intent);
-      eventBus.emit("agent", "action_started", { intent, stage: "received" });
 
       // Stage 3a: Schema re-validate individual intent
       if (!intent.id || !intent.type) {
@@ -237,89 +245,46 @@ export class RuntimeCore {
       }
 
       logger.intentValidated(intent);
-
-      // Stage 3c: Dispatch through ActionDispatcher
-      if (!this.dispatcher) {
-        results.push({
-          actionId: intent.id,
-          success: false,
-          message: "No ActionDispatcher set — call setDispatcher() first",
-          interrupted: false,
-          timedOut: false,
-        });
-        hasFailures = true;
-        continue;
-      }
-
-      const actionStart = Date.now();
-      const result = await this.dispatcher.dispatch(intent);
-      const actionDuration = Date.now() - actionStart;
-
-      // Track stats
-      this.totalLatencyMs += actionDuration;
-      this.latencySamples++;
-
-      if (result.success) {
-        this.intentsApproved++;
-        this.actionsCompleted++;
-        logger.actionCompleted(intent, result, actionDuration);
-      } else {
-        this.actionsFailed++;
-        if (result.timedOut) {
-          this.actionsTimedOut++;
-          logger.actionTimeout(intent, intent.timeout || 5000);
-        } else {
-          logger.actionFailed(intent, result, actionDuration);
-        }
-        hasFailures = true;
-      }
-
-      results.push(result);
+      this.intentsApproved++;
+      validatedActions.push(intent);
     }
 
-    // Track memory/task signals (Phase 5/6 implementation)
-    if (agentOutput.memory_save) {
-      eventBus.emit("memory", "memory_stored", {
-        candidate: agentOutput.memory_save,
-        source: "llm_output",
-      });
-    }
+    // Track latency
+    const elapsed = Date.now() - startTime;
+    this.totalLatencyMs += elapsed;
+    this.latencySamples++;
 
-    if (agentOutput.task_update) {
-      const update = agentOutput.task_update;
-      const eventType = update.action === "fail" ? "task_failed"
-        : update.action === "complete" ? "task_completed"
-        : "task_started";
-      eventBus.emit("agent", eventType, { taskUpdate: update });
-    }
+    // Build validated output (with safety-filtered actions)
+    const validatedOutput: AgentOutput = {
+      ...agentOutput,
+      actions: validatedActions,
+    };
 
     return {
-      success: !hasFailures,
-      results,
+      success: !hasFailures && validatedActions.length > 0,
+      output: validatedOutput,
       schemaResult,
       rejectedIntents,
+      speech: agentOutput.speech,
+      memorySave: agentOutput.memory_save,
+      taskUpdate: agentOutput.task_update,
     };
   }
 
-  // ─── Direct Intent (single) ────────────────────────
+  // ─── Stats ─────────────────────────────────────────
 
-  /**
-   * Process a single pre-validated IntentAction directly.
-   * Used when the intent is generated programmatically, not from an LLM.
-   */
-  async processIntent(intent: IntentAction): Promise<ExecutionResult> {
-    return this.processAgentOutput({
-      actions: [intent],
-    }).then((p) => p.results[0] ?? {
-      actionId: intent.id,
-      success: false,
-      message: "No result produced",
-      interrupted: false,
-      timedOut: false,
-    });
+  /** Record an action completion (called externally by SkillRouter after dispatch). */
+  recordActionCompleted(latencyMs: number): void {
+    this.actionsCompleted++;
+    this.totalLatencyMs += latencyMs;
+    this.latencySamples++;
   }
 
-  // ─── Stats ─────────────────────────────────────────
+  /** Record an action failure (called externally by SkillRouter after dispatch). */
+  recordActionFailed(timedOut: boolean): void {
+    this.actionsFailed++;
+    if (timedOut) this.actionsTimedOut++;
+  }
 
   getStats(): RuntimeStats {
     return {

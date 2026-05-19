@@ -1,0 +1,41 @@
+{
+  "stability": {
+    "stuckThresholdMs": 8000,
+    "loopActionWindowMs": 5000,
+    "loopActionCount": 3,
+    "loopCooldownMs": 3000,
+    "skillFailureThreshold": 3,
+    "skillDisableMs": 7000,
+    "safeModeMinDurationMs": 10000,
+    "safeModeAutoExitMs": 15000,
+    "safeModeReentryCooldownMs": 30000
+  },
+
+  "behavior": {
+    "enableSafeMode": true,
+    "allowCombatInSafeMode": false,
+    "preferExploreInSafeMode": true
+  },
+
+  "fallback": {
+    "mine_resource": "explore_area",
+    "attack_target": "defend_player",
+    "gather_food": "collect_items",
+    "follow_player": "explore_area",
+    "build_shelter": "explore_area",
+    "collect_items": "explore_area",
+    "explore_area": "wait",
+    "defend_player": "follow_player"
+  },
+
+  "voice": {
+    "pressureSensitivity": 1.0,
+    "enableVoiceTimingBias": true
+  },
+
+  "arbitration": {
+    "voiceWeightMultiplier": 1.5,
+    "memoryWeightMultiplier": 1.2,
+    "relationshipProtectionEnabled": true
+  }
+}

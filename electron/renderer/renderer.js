@@ -14,6 +14,7 @@
   const btnStop = document.getElementById("btn-stop");
   const btnSave = document.getElementById("btn-save");
   const btnClear = document.getElementById("btn-clear");
+  const btnDashboard = document.getElementById("btn-dashboard");
   const consoleOutput = document.getElementById("console-output");
   const statusDot = document.getElementById("status-dot");
   const chatInput = document.getElementById("chat-input");
@@ -209,6 +210,13 @@
   btnStop.addEventListener("click", stopBot);
   btnSave.addEventListener("click", saveConfig);
   btnClear.addEventListener("click", clearConsole);
+  btnDashboard.addEventListener("click", async () => {
+    try {
+      await window.aimc.openDashboard();
+    } catch (err) {
+      appendConsole(`[SYSTEM] Failed to open dashboard: ${err.message}\n`, "stderr");
+    }
+  });
   btnSend.addEventListener("click", sendChat);
   chatInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); sendChat(); }

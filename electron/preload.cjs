@@ -35,4 +35,18 @@ contextBridge.exposeInMainWorld("aimc", {
     ipcRenderer.on("bot:chat-response", handler);
     return () => ipcRenderer.removeListener("bot:chat-response", handler);
   },
+
+  // ─── Dashboard (P1) ──────────────────────────────────
+  openDashboard: () => ipcRenderer.invoke("dashboard:open"),
+  getDashboardStatus: () => ipcRenderer.invoke("dashboard:status"),
+  onDashboardState: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on("aimc:dashboard-state", handler);
+    return () => ipcRenderer.removeListener("aimc:dashboard-state", handler);
+  },
+  onDashboardStatus: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on("aimc:dashboard-status", handler);
+    return () => ipcRenderer.removeListener("aimc:dashboard-status", handler);
+  },
 });

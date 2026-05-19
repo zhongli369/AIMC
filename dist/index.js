@@ -13,6 +13,10 @@ import { Coordinator } from "./coordination/index.js";
 import { PerformanceProfiler, TokenTracker } from "./performance/index.js";
 import { HeuristicEngine } from "./heuristics/index.js";
 import { Watchdog, RecoveryManager } from "./recovery/index.js";
+import { SkillRouter, SkillRegistry } from "./skill/index.js";
+import { RoleAdaptationEngine, loadIdentity, createAutoSave, getRoleProfile, } from "./role/index.js";
+import { RelationshipEngine, SharedExperienceTimeline, MemoryCallbackGenerator, loadRelationshipState, loadSharedExperiences, createMemoryAutoSave as createRelAutoSave, } from "./memory/index.js";
+import { initUIStateBridge } from "./ui/state-bridge.js";
 // Phase 2: Runtime Execution Layer
 export const runtimeCore = new RuntimeCore();
 // Phase 3: Agent LLM layer (lazy-init when deepseek API key available)
@@ -29,6 +33,19 @@ let socialEngine = null;
 let proactiveEngine = null;
 let taskPlanner = null;
 let coordinator = null;
+// Phase 2: Skill system (lazy-init)
+let skillRouter = null;
+let skillRegistry = null;
+// P1: UI State Bridge
+let uiBridge = null;
+// Phase 4-D: Role system (lazy-init)
+let roleAdaptation = null;
+let roleAutoSaveCleanup = null;
+// Phase 4-E: Relationship & Shared Experience (lazy-init)
+let relationshipEngine = null;
+let sharedExperiences = null;
+let callbackGenerator = null;
+let memoryAutoSaveCleanup = null;
 // Productionization: Performance, heuristics, recovery (lazy-init)
 let profiler = null;
 let tokenTracker = null;
@@ -49,6 +66,10 @@ export function initAgent(deepseekConfig) {
     // Wire heuristic if already initialized
     if (heuristicEngine) {
         agentCore.setHeuristicEngine(heuristicEngine);
+    }
+    // Wire skill system if already initialized
+    if (skillRouter) {
+        agentCore.setSkillRouter(skillRouter);
     }
     // Wire personality if already initialized
     if (personalityEngine && emotionEngine && socialEngine && proactiveEngine && taskPlanner) {
@@ -133,8 +154,106 @@ export function initPersonality(params = {}) {
     updateBridge();
     return { personality: personalityEngine, emotion: emotionEngine, social: socialEngine, proactive: proactiveEngine, tasks: taskPlanner, coordinator };
 }
+/** Initialize Phase 2 skill system. */
+export function initSkill() {
+    skillRegistry = new SkillRegistry();
+    skillRouter = new SkillRouter(skillRegistry);
+    // Wire into AgentCore if already initialized
+    if (agentCore) {
+        agentCore.setSkillRouter(skillRouter);
+    }
+    console.log(`[AIMC] Skill system initialized — ${skillRegistry.list().length} skills registered`);
+    updateBridge();
+    return { router: skillRouter, registry: skillRegistry };
+}
+export function getSkill() {
+    return { router: skillRouter, registry: skillRegistry };
+}
+/** Initialize Phase 4-D role specialization system. */
+export function initRole(params) {
+    // Load persisted identity or create default
+    const dataDir = params?.dataDir || "./aimc_data";
+    const identity = loadIdentity({ dataDir }, params?.initialRole || "balanced");
+    roleAdaptation = new RoleAdaptationEngine(identity);
+    // Start auto-save
+    if (roleAutoSaveCleanup)
+        roleAutoSaveCleanup();
+    roleAutoSaveCleanup = createAutoSave(() => roleAdaptation.getIdentity(), { dataDir }, params?.autoSaveIntervalMs ?? 60_000);
+    // Wire into AgentCore if already initialized
+    if (agentCore) {
+        agentCore.setRoleBackend(roleAdaptation);
+    }
+    const profile = getRoleProfile(identity.currentRole);
+    console.log(`[AIMC] Role system initialized — ${profile.label} (${profile.description})`);
+    updateBridge();
+    return roleAdaptation;
+}
+export function getRole() {
+    return roleAdaptation;
+}
+/** Initialize Phase 4-E relationship + shared experience system. */
+export function initRelationship(params) {
+    const dataDir = params?.dataDir || "./aimc_data";
+    // Load persisted state
+    const relLoaded = loadRelationshipState({ dataDir });
+    const expLoaded = loadSharedExperiences({ dataDir });
+    relationshipEngine = new RelationshipEngine(relLoaded.state);
+    sharedExperiences = new SharedExperienceTimeline(expLoaded.experiences);
+    callbackGenerator = new MemoryCallbackGenerator(params?.language || "zh");
+    // Register session start
+    relationshipEngine.registerSessionStart();
+    // Start auto-save
+    if (memoryAutoSaveCleanup)
+        memoryAutoSaveCleanup();
+    memoryAutoSaveCleanup = createRelAutoSave({
+        getRelationshipState: () => relationshipEngine.getState(),
+        getExperiences: () => sharedExperiences.getAll(),
+        config: { dataDir },
+        intervalMs: params?.autoSaveIntervalMs ?? 60_000,
+    }).stop;
+    // Re-create with save capability
+    const handle = createRelAutoSave({
+        getRelationshipState: () => relationshipEngine.getState(),
+        getExperiences: () => sharedExperiences.getAll(),
+        config: { dataDir },
+        intervalMs: params?.autoSaveIntervalMs ?? 60_000,
+    });
+    memoryAutoSaveCleanup = handle.stop;
+    // Wire into AgentCore if already initialized
+    if (agentCore) {
+        agentCore.setRelationshipBackend({
+            relationship: relationshipEngine,
+            experiences: sharedExperiences,
+            language: params?.language,
+        });
+    }
+    const snap = relationshipEngine.getSnapshot();
+    console.log(`[AIMC] Relationship system initialized — ${snap.style}, ${snap.summary}`);
+    console.log(`[AIMC] Shared experiences: ${sharedExperiences.getStats().totalMemories} memories loaded`);
+    updateBridge();
+    return { relationship: relationshipEngine, experiences: sharedExperiences, callbacks: callbackGenerator };
+}
+export function getRelationship() {
+    return {
+        relationship: relationshipEngine,
+        experiences: sharedExperiences,
+        callbacks: callbackGenerator,
+    };
+}
 export function getPersonality() {
     return { personality: personalityEngine, emotion: emotionEngine, social: socialEngine, proactive: proactiveEngine, tasks: taskPlanner, coordinator };
+}
+/** Initialize P1 UI state bridge — telemetry → Electron IPC. */
+export function initUI(params) {
+    if (uiBridge)
+        uiBridge.stop();
+    uiBridge = initUIStateBridge(params?.intervalMs ?? 1000);
+    console.log("[AIMC] UI State Bridge initialized — emitting AIMC_UI_STATE every " + (params?.intervalMs ?? 1000) + "ms");
+    updateBridge();
+    return uiBridge;
+}
+export function getUIBridge() {
+    return uiBridge;
 }
 /** Initialize all productionization systems: performance, heuristics, recovery. */
 export function initProduction(params) {
@@ -193,6 +312,8 @@ function updateBridge() {
         proactiveEngine,
         taskPlanner,
         coordinator,
+        skillRouter,
+        skillRegistry,
         profiler,
         tokenTracker,
         heuristicEngine,
@@ -202,7 +323,16 @@ function updateBridge() {
         getVoice: () => voiceOrchestrator,
         getMemory: () => ({ store: memoryStore, retriever: memoryRetriever }),
         getPersonality: () => ({ personality: personalityEngine, emotion: emotionEngine, social: socialEngine, proactive: proactiveEngine, tasks: taskPlanner, coordinator }),
+        getSkill: () => ({ router: skillRouter, registry: skillRegistry }),
+        getRole: () => roleAdaptation,
+        roleAdaptation,
+        relationshipEngine,
+        sharedExperiences,
+        callbackGenerator,
+        getRelationship: () => ({ relationship: relationshipEngine, experiences: sharedExperiences, callbacks: callbackGenerator }),
         getProduction: () => ({ profiler, tokenTracker, heuristicEngine, watchdog, recoveryManager }),
+        uiBridge,
+        getUIBridge: () => uiBridge,
     };
 }
 // Bridge: expose runtimeCore immediately (before agent init) for safety-only usage
@@ -210,9 +340,10 @@ updateBridge();
 async function main() {
     console.log("[AIMC] AI Minecraft Companion starting...");
     console.log(`[AIMC] EventBus active with ${eventBus.getSubscriberCount()} subscribers`);
-    // Phase 2: Runtime Execution Layer
+    // Phase 2: Runtime Execution Layer + Skill System
     runtimeCore.start();
     console.log("[AIMC] RuntimeCore pipeline: Schema → SafetyGuard → ActionDispatcher");
+    console.log("[AIMC] Skill system: SkillRegistry + SkillRouter ready — call initSkill() to activate");
     // Phase 3: DeepSeek V4 Pro integration ready
     console.log("[AIMC] LLM layer: DeepSeekV4Pro + ContextAssembler + StreamParser ready");
     console.log("[AIMC] AgentCore ready — call initAgent({ apiKey, ... }) to activate");
@@ -225,11 +356,24 @@ async function main() {
     console.log("[AIMC] Personality: Profiles (4 presets) + EmotionEngine + SocialEngine ready");
     console.log("[AIMC] Proactive: ProactiveEngine + TaskPlanner + Coordinator ready");
     console.log("[AIMC] Phase 6 ready — call initPersonality({ preset: 'companion' }) to activate");
+    // Phase 4-D: Role Specialization & Companion Identity
+    console.log("[AIMC] Role: 5 companion roles (miner/fighter/scout/support/balanced) ready");
+    console.log("[AIMC] Role: RoleAdaptationEngine + JSON persistence ready — call initRole() to activate");
+    // Phase 4-E: Memory, Relationship & Shared Experience
+    console.log("[AIMC] Relationship: familiarity/trust/teamwork tracking ready");
+    console.log("[AIMC] Memory: SharedExperienceTimeline (8 categories) + MemoryCallbackGenerator ready");
+    console.log("[AIMC] Memory: JSON persistence with atomic writes + auto-save ready");
+    console.log("[AIMC] Phase 4-E ready — call initRelationship() to activate");
+    console.log("[AIMC] Role: RoleAdaptationEngine + JSON persistence ready — call initRole() to activate");
     // Productionization: Performance + Heuristics + Recovery
     console.log("[AIMC] Productionization: PerformanceProfiler + TokenTracker ready");
     console.log("[AIMC] Productionization: HeuristicEngine ready (non-LLM decision layer)");
     console.log("[AIMC] Productionization: Watchdog + RecoveryManager ready");
     console.log("[AIMC] Productionization ready — call initProduction() to activate");
+    // P1: UI Product Layer
+    console.log("[AIMC] UI: UIStateBridge ready — call initUI() to activate");
+    console.log("[AIMC] UI: AIMC_UI_STATE → stdout → Electron IPC → Dashboard (960x620, 3-panel)");
+    console.log("[AIMC] Voice: Voice Profile Loader ready — call loadVoiceProfiles() to load per-role TTS settings");
     console.log("[AIMC] Ready.");
     // Quick start:
     //   initAgent({ apiKey: "sk-...", model: "deepseek-chat" })

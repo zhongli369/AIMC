@@ -211,6 +211,18 @@ header .subtitle {
   border-color: var(--accent);
 }
 
+.btn-dashboard {
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--accent);
+  font-size: 12px;
+  padding: 8px 14px;
+}
+
+.btn-dashboard:hover {
+  background: rgba(88, 166, 255, 0.1);
+}
+
 /* ─── Console ────────────────────────────────────────── */
 .console-container {
   background: var(--bg-card);

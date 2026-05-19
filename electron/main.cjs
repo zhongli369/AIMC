@@ -1,27 +1,38 @@
 /**
  * AIMC Electron Launcher — Main Process
  *
- * Handles: window management, IPC, bot lifecycle.
- * Uses utilityProcess.fork so it works BOTH in dev and as a packaged .exe.
+ * Architecture:
+ *   LauncherResolver → path discovery + validation
+ *   BotProcessManager → spawn, lifecycle, error classification
+ *   main.cjs → window, IPC, config, glue
+ *
+ * All paths are dynamically resolved. No hardcoded paths.
+ * cwd is guaranteed to be a real filesystem path (never inside ASAR).
  */
-const { app, BrowserWindow, ipcMain, dialog } = require("electron");
+
+const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const fs = require("fs");
-const { spawn } = require("child_process");
 
-// ─── Paths ──────────────────────────────────────────────
+const {
+  validate: validatePaths,
+  resolveBotProfileDir,
+  buildBotElectronFlags,
+} = require("./launcher-resolver.cjs");
+const { BotProcessManager } = require("./bot-process-manager.cjs");
+
+// ─── Paths ──────────────────────────────────────────────────
 
 const CONFIG_PATH = path.join(app.getPath("userData"), "aimc-config.json");
 const TEMP_PROFILE_PATH = path.join(app.getPath("temp"), "aimc-temp-profile.json");
-const PROJECT_ROOT = path.resolve(__dirname, "..");
 
-// ─── State ───────────────────────────────────────────────
+// ─── State ──────────────────────────────────────────────────
 
 let mainWindow = null;
-let botProcess = null;
-let botRunning = false;
+let dashboardWindow = null;
+const botManager = new BotProcessManager();
 
-// ─── Config ──────────────────────────────────────────────
+// ─── Config ─────────────────────────────────────────────────
 
 const DEFAULT_CONFIG = {
   apiKey: "",
@@ -53,7 +64,7 @@ function saveConfig(config) {
   }
 }
 
-// ─── Profile Generator ───────────────────────────────────
+// ─── Profile Generator ──────────────────────────────────────
 
 function buildProfile(config) {
   return {
@@ -83,7 +94,7 @@ function buildProfile(config) {
   };
 }
 
-// ─── Model → Env Var Mapping ────────────────────────────
+// ─── Model → Env Var Mapping ───────────────────────────────
 
 const MODEL_API_KEY_MAP = {
   "deepseek-chat": "DEEPSEEK_API_KEY",
@@ -105,20 +116,41 @@ function getApiKeyEnvVar(model) {
   return MODEL_API_KEY_MAP[model] || "DEEPSEEK_API_KEY";
 }
 
-// ─── Bot Lifecycle ───────────────────────────────────────
+// ─── IPC → Renderer helpers ─────────────────────────────────
 
+function sendToRenderer(channel, data) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, data);
+  }
+}
+
+// ─── Bot Lifecycle ──────────────────────────────────────────
+
+/**
+ * Start the bot using validated paths and BotProcessManager.
+ * Paths are resolved dynamically — no hardcoded paths.
+ */
 function startBot(config) {
-  // Auto-recovery: if the flag is set but the process died, reset state
-  if (botRunning && (!botProcess || botProcess.killed || botProcess.exitCode !== null)) {
-    botRunning = false;
-    botProcess = null;
+  // ── Auto-recovery: detect stale state ─────────────
+  const health = botManager.healthCheck();
+  if (!health.healthy && health.details.reason === "state_mismatch") {
+    console.log("[AIMC Launcher] Auto-recovered from stale bot state.");
   }
 
-  if (botRunning) {
+  if (botManager.running) {
     return { success: false, error: "Bot is already running." };
   }
 
-  // Build profile and write temp file
+  // ── Validate paths (DRY: LauncherResolver) ───────
+  const validation = validatePaths();
+  if (!validation.valid) {
+    const errorMsg = "Path validation failed:\n" + validation.errors.map((e) => "  - " + e).join("\n");
+    console.error("[AIMC Launcher]", errorMsg);
+    sendToRenderer("bot:output", { type: "stderr", text: errorMsg + "\n" });
+    return { success: false, error: validation.errors[0] };
+  }
+
+  // ── Build profile ─────────────────────────────────
   const profile = buildProfile(config);
   try {
     fs.writeFileSync(TEMP_PROFILE_PATH, JSON.stringify(profile, null, 2), "utf8");
@@ -126,7 +158,7 @@ function startBot(config) {
     return { success: false, error: `Failed to write profile: ${err.message}` };
   }
 
-  // Build settings JSON
+  // ── Build env ─────────────────────────────────────
   const settingsJson = JSON.stringify({
     host: config.host,
     port: Number(config.port),
@@ -139,91 +171,50 @@ function startBot(config) {
 
   const apiKeyVar = getApiKeyEnvVar(config.model);
 
-  const env = {
-    ...process.env,
-    PROFILES: JSON.stringify([TEMP_PROFILE_PATH]),
-    SETTINGS_JSON: settingsJson,
-    [apiKeyVar]: config.apiKey,
-  };
+  // ── Bot runtime profile (isolated Chromium cache) ──
+  const botId = `${config.botName || "bot"}_${Date.now()}`;
+  const runtimeProfile = resolveBotProfileDir(botId);
 
-  const bridgePath = path.join(__dirname, "legacy-bridge.cjs");
+  if (!runtimeProfile.profileDir) {
+    const errorMsg = `Failed to create bot profile directory: ${runtimeProfile.error}`;
+    console.error("[AIMC Launcher]", errorMsg);
+    sendToRenderer("bot:output", { type: "stderr", text: errorMsg + "\n" });
+    return { success: false, error: errorMsg };
+  }
 
-  // Use child_process.spawn: Electron 33's utilityProcess.fork returns null for stdout.
-  // spawn with process.execPath works because Electron bundles Node.js in both dev and packaged builds.
-  botProcess = spawn(process.execPath, [bridgePath], {
-    cwd: PROJECT_ROOT,
-    env,
-    stdio: ["pipe", "pipe", "pipe"],
+  const electronFlags = buildBotElectronFlags(runtimeProfile.profileDir);
+
+  console.log("[AIMC Launcher] Bot runtime profile:");
+  console.log("  botId:", botId);
+  console.log("  profileDir:", runtimeProfile.profileDir);
+  console.log("  electronFlags:", electronFlags);
+  console.log("[AIMC Launcher] Env vars passed to bot:");
+  console.log("  SETTINGS_JSON:", settingsJson);
+  console.log("  apiKeyEnvVar:", apiKeyVar, "=", config.apiKey ? "present" : "MISSING");
+
+  // ── Spawn via BotProcessManager ───────────────────
+  // BotProcessManager emits its own "status" events — do NOT duplicate them here.
+  const result = botManager.start({
+    exePath: validation.exePath,
+    bridgePath: validation.bridgePath,
+    cwd: validation.cwd,
+    electronFlags,
+    env: {
+      PROFILES: JSON.stringify([TEMP_PROFILE_PATH]),
+      SETTINGS_JSON: settingsJson,
+      [apiKeyVar]: config.apiKey,
+    },
   });
 
-  botProcess.on("error", (err) => {
-    botRunning = false;
-    botProcess = null;
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("bot:output", {
-        type: "stderr",
-        text: `Failed to spawn bot process: ${err.message}\n`,
-      });
-      mainWindow.webContents.send("bot:status", { running: false, error: err.message });
-    }
-  });
-
-  botRunning = true;
-
-  let stdoutBuf = "";
-  botProcess.stdout.on("data", (chunk) => {
-    const raw = Buffer.isBuffer(chunk) ? chunk.toString() : chunk;
-    stdoutBuf += raw;
-    const lines = stdoutBuf.split("\n");
-    stdoutBuf = lines.pop() || "";
-
-    for (const line of lines) {
-      if (line.startsWith("AIMC_MSG:")) {
-        try {
-          const msg = JSON.parse(line.slice(9));
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send("bot:chat-response", msg);
-          }
-        } catch (_) { /* malformed JSON, ignore */ }
-      } else if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("bot:output", { type: "stdout", text: line + "\n" });
-      }
-    }
-  });
-
-  botProcess.stderr.on("data", (chunk) => {
-    const text = Buffer.isBuffer(chunk) ? chunk.toString() : chunk;
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("bot:output", { type: "stderr", text });
-    }
-  });
-
-  botProcess.on("exit", (code) => {
-    botRunning = false;
-    botProcess = null;
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("bot:status", { running: false, exitCode: code });
-    }
-  });
-
-  return { success: true };
+  return result;
 }
 
 function stopBot() {
-  if (!botRunning || !botProcess) {
-    return { success: false, error: "Bot is not running." };
-  }
-  try {
-    botProcess.kill();
-    botProcess = null;
-    botRunning = false;
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
+  // BotProcessManager emits "status: {running: false}" via the exit handler — do not duplicate.
+  return botManager.stop();
 }
 
-// ─── Window ──────────────────────────────────────────────
+// ─── Window ─────────────────────────────────────────────────
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -246,7 +237,65 @@ function createWindow() {
   });
 }
 
-// ─── IPC Handlers ────────────────────────────────────────
+function createDashboard() {
+  if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+    dashboardWindow.focus();
+    return dashboardWindow;
+  }
+
+  dashboardWindow = new BrowserWindow({
+    width: 960,
+    height: 620,
+    resizable: true,
+    minWidth: 800,
+    minHeight: 500,
+    title: "AIMC Dashboard",
+    webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+    autoHideMenuBar: true,
+  });
+
+  dashboardWindow.loadFile(path.join(__dirname, "renderer", "ui", "dashboard.html"));
+
+  dashboardWindow.on("closed", () => {
+    dashboardWindow = null;
+  });
+
+  return dashboardWindow;
+}
+
+// ─── BotManager → Renderer event forwarding ─────────────────
+
+function sendToDashboard(channel, data) {
+  if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+    dashboardWindow.webContents.send(channel, data);
+  }
+}
+
+function wireBotEvents() {
+  botManager.on("status", (status) => {
+    sendToRenderer("bot:status", status);
+    // Also forward to dashboard for connected/disconnected state
+    sendToDashboard("aimc:dashboard-status", status);
+  });
+
+  botManager.on("output", (output) => {
+    sendToRenderer("bot:output", output);
+  });
+
+  botManager.on("chat-response", (msg) => {
+    sendToRenderer("bot:chat-response", msg);
+  });
+
+  botManager.on("ui-state", (state) => {
+    sendToDashboard("aimc:dashboard-state", state);
+  });
+}
+
+// ─── IPC Handlers ───────────────────────────────────────────
 
 function registerIpcHandlers() {
   ipcMain.handle("config:load", () => loadConfig());
@@ -259,54 +308,47 @@ function registerIpcHandlers() {
   ipcMain.handle("bot:start", (_event, config) => {
     const { apiKey, ...safeConfig } = config;
     saveConfig(safeConfig);
-    const result = startBot(config);
-    if (result.success && mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("bot:status", { running: true });
-    }
-    return result;
+    return startBot(config);
   });
 
-  ipcMain.handle("bot:stop", () => {
-    const result = stopBot();
-    if (result.success && mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("bot:status", { running: false });
-    }
-    return result;
-  });
+  ipcMain.handle("bot:stop", () => stopBot());
 
   ipcMain.handle("bot:status", () => {
-    return { running: botRunning };
+    return { running: botManager.running };
   });
 
   ipcMain.handle("chat:send", (_event, message) => {
-    if (!botRunning || !botProcess || !botProcess.stdin.writable) {
-      return { success: false, error: "Bot is not running or stdin is closed." };
-    }
-    try {
-      botProcess.stdin.write(JSON.stringify({
-        type: "chat",
-        message: String(message).trim(),
-        source: "player",
-      }) + "\n");
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: err.message };
-    }
+    return botManager.sendChat(message);
+  });
+
+  ipcMain.handle("dashboard:open", () => {
+    createDashboard();
+    return { success: true };
+  });
+
+  ipcMain.handle("dashboard:status", () => {
+    return {
+      open: !!(dashboardWindow && !dashboardWindow.isDestroyed()),
+    };
   });
 }
 
-// ─── App Lifecycle ───────────────────────────────────────
+// ─── App Lifecycle ──────────────────────────────────────────
 
 app.whenReady().then(() => {
+  wireBotEvents();
   registerIpcHandlers();
   createWindow();
 });
 
 app.on("window-all-closed", () => {
-  stopBot();
+  botManager.stop();
   app.quit();
 });
 
 app.on("before-quit", () => {
-  stopBot();
+  botManager.stop();
+  if (dashboardWindow && !dashboardWindow.isDestroyed()) {
+    dashboardWindow.close();
+  }
 });

@@ -267,8 +267,9 @@ export class Agent {
     // route through this method instead of the legacy !command parser.
     //
     // Flow: chat → AgentCore.think() → ContextAssembler → DeepSeekV4Pro
-    //       → StreamParser → RuntimeCore.processAgentOutput()
-    //       → Schema validation (Zod) → SafetyGuard → ActionDispatcher → Mineflayer
+    //       → StreamParser → RuntimeCore.validate() (schema + safety)
+    //       → SkillRouter.route() → ActionDispatcher → Mineflayer
+    //       Single Execution Chain: AgentCore → SkillRouter → ActionDispatcher → Mineflayer
     // ═══════════════════════════════════════════════════════════
     async _handleMessageViaRuntime(source, message, max_responses=null) {
         if (source === 'system' || source === this.name) {
@@ -333,14 +334,17 @@ export class Agent {
             return false;
         }
 
-        // Try to parse as AgentOutput JSON and dispatch via RuntimeCore
+        // Legacy fallback: parse JSON and route through SkillRouter
+        // Single execution chain: validate → SkillRouter → ActionDispatcher
         if (aimc?.runtimeCore) {
             try {
                 const trimmed = res.trim();
                 // Strip markdown fences if present
                 const jsonStr = trimmed.replace(/^```(?:json|JSON)?\s*/, '').replace(/\s*```\s*$/, '');
                 const parsed = JSON.parse(jsonStr);
-                const pipelineResult = await aimc.runtimeCore.processAgentOutput(parsed);
+
+                // Step 1: Validate via RuntimeCore (schema + safety only, NO execution)
+                const validation = aimc.runtimeCore.validate(parsed);
 
                 const speech = parsed?.speech?.text || '';
                 if (speech) {
@@ -348,7 +352,19 @@ export class Agent {
                     this.routeResponse(source, speech);
                 }
                 this.history.save();
-                return pipelineResult.results.length > 0;
+
+                // Step 2: Route validated output through SkillRouter (ONLY execution path)
+                if (validation.output && aimc.skillRouter) {
+                    const skillCtx = {
+                        botState: this._buildBotState(),
+                        nearbyEntities: [],
+                        nearbyPlayers: [],
+                        nearbyHostiles: [],
+                    };
+                    const routeResult = await aimc.skillRouter.route(validation.output, skillCtx);
+                    return routeResult.results.length > 0;
+                }
+                return false;
             } catch {
                 // Not valid JSON — treat as plain text conversation
             }

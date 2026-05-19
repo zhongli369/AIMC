@@ -131,12 +131,48 @@ export interface TaskStateChange {
   reason?: string;
 }
 
+// ─── Skill Intent ────────────────────────────────────────────
+
+export interface SkillIntent {
+  /** Skill name registered in SkillRegistry */
+  name: string;
+  /** Parameters for the skill */
+  params?: Record<string, unknown>;
+}
+
+// ─── Plan Definition ─────────────────────────────────────────
+
+export interface PlanStep {
+  step: number;
+  /** Human-readable action description */
+  action: string;
+  /** Skill to invoke (if any) */
+  skill?: string;
+  /** Parameters for the skill or direct action */
+  params: Record<string, unknown>;
+}
+
+export interface TaskPlan {
+  goal: string;
+  steps: PlanStep[];
+}
+
+// ─── Agent Intent ────────────────────────────────────────────
+
+export type AgentIntent = "chat" | "skill" | "plan";
+
 // ─── Agent Output (LLM contract) ─────────────────────────────
 
 export interface AgentOutput {
+  /** Top-level intent classification */
+  intent: AgentIntent;
+  /** Single skill execution (when intent="skill") */
+  skill?: SkillIntent;
+  /** Multi-step plan (when intent="plan") */
+  plan?: TaskPlan;
   /** What the agent wants to say (optional) */
   speech?: SpeechIntent;
-  /** Actions to execute (empty array = no actions) */
+  /** Actions to execute (empty array = no actions). Used for intent="chat" or fallback. */
   actions: IntentAction[];
   /** Memory to save (optional) */
   memory_save?: MemoryCandidate;
@@ -171,5 +207,6 @@ export interface ExecutionResult {
   message: string;
   interrupted: boolean;
   timedOut: boolean;
+  /** Phase 3-A: arbitrary metadata (retryAttempt, duration, etc.) */
   data?: Record<string, unknown>;
 }

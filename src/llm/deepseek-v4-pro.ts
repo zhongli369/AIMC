@@ -55,6 +55,7 @@ export interface DeepSeekResult {
 // ─── Fallback Idle Intent ────────────────────────────
 
 export const FALLBACK_IDLE_OUTPUT: ValidatedAgentOutput = {
+  intent: "chat",
   actions: [
     {
       id: "fallback-idle",

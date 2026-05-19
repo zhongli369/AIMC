@@ -5,11 +5,20 @@
   "description": "AI Minecraft Companion — real-time AI teammate system",
   "main": "electron/main.cjs",
   "scripts": {
-    "build": "tsc",
+    "build": "node scripts/build.cjs",
+    "build:no-pack": "node scripts/build.cjs --no-pack",
+    "build:smoke": "node scripts/build.cjs --smoke",
+    "clean": "node scripts/build.cjs --clean",
+    "rebuild": "node scripts/build.cjs",
+    "pack": "node scripts/build.cjs --pack-only",
+    "dist": "node scripts/build.cjs --pack-only",
+    "release": "node scripts/build.cjs",
+    "release:win": "node scripts/build.cjs",
+    "release:portable": "node scripts/build.cjs --portable",
+    "precheck": "node scripts/pre-release-check.cjs",
     "start": "node dist/index.js",
     "dev": "tsc && node dist/index.js",
     "electron": "electron .",
-    "electron:dist": "electron-builder --win dir",
     "postinstall": "patch-package",
     "typecheck": "tsc --noEmit"
   },
@@ -56,24 +65,35 @@
     "typescript": "^5.6.0"
   },
   "build": {
-    "appId": "com.aimc.launcher",
+    "appId": "com.aimc.mcp",
     "productName": "AIMC Launcher",
-    "files": [
-      "electron/**/*",
-      "src/legacy/**/*",
-      "node_modules/**/*",
-      "package.json"
-    ],
     "directories": {
       "output": "release"
     },
-    "electronDownload": {
-      "mirror": "https://npmmirror.com/mirrors/electron/"
-    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "config/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "extraResources": [
+      {
+        "from": "config",
+        "to": "config"
+      },
+      {
+        "from": "electron/renderer/ui/voice-profile.json",
+        "to": "voice-profile.json"
+      }
+    ],
     "win": {
       "target": "dir",
-      "icon": null
+      "icon": null,
+      "signAndEditExecutable": false
+    },
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
     }
-  },
-  "overrides": {}
+  }
 }

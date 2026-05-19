@@ -1,0 +1,391 @@
+/* ─── Dashboard Theme ──────────────────────────────────── */
+:root {
+  --bg: #0d1117;
+  --bg-card: #161b22;
+  --border: #30363d;
+  --text: #c9d1d9;
+  --text-muted: #8b949e;
+  --accent: #58a6ff;
+  --danger: #f85149;
+  --success: #3fb950;
+  --warning: #d2991d;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: "Cascadia Code", "Fira Code", Consolas, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+/* ─── Dashboard Layout ─────────────────────────────────── */
+.dashboard {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px;
+}
+
+/* ─── Header ───────────────────────────────────────────── */
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+header h1 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.3px;
+}
+
+.status-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.status-badge.connected {
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--success);
+  border: 1px solid rgba(63, 185, 80, 0.3);
+}
+
+.status-badge.disconnected {
+  background: rgba(139, 148, 158, 0.15);
+  color: var(--text-muted);
+  border: 1px solid rgba(139, 148, 158, 0.3);
+}
+
+.clock {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ─── Panels Grid ──────────────────────────────────────── */
+.panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.panel-header h2 {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.panel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.panel-dot.live {
+  background: var(--success);
+  box-shadow: 0 0 4px var(--success);
+}
+
+.panel-body {
+  padding: 12px 14px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* ─── Stats ────────────────────────────────────────────── */
+.stat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  width: 72px;
+  flex-shrink: 0;
+}
+
+.stat-value {
+  font-size: 13px;
+  color: var(--text);
+  flex: 1;
+}
+
+.stat-value.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.speech-row {
+  align-items: flex-start;
+}
+
+.speech-text {
+  font-style: italic;
+  color: var(--text-muted);
+  max-height: 3em;
+  overflow: hidden;
+}
+
+/* ─── Bars ─────────────────────────────────────────────── */
+.bar-bg {
+  flex: 1;
+  height: 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.health-fill {
+  background: var(--danger);
+}
+
+.health-fill.warning {
+  background: var(--warning);
+}
+
+.health-fill.good {
+  background: var(--success);
+}
+
+.food-fill {
+  background: var(--warning);
+}
+
+.food-fill.low {
+  background: var(--danger);
+}
+
+/* ─── Intent Badge ─────────────────────────────────────── */
+.intent-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  background: rgba(88, 166, 255, 0.12);
+  color: var(--accent);
+  border: 1px solid rgba(88, 166, 255, 0.25);
+}
+
+.intent-badge.skill { background: rgba(63, 185, 80, 0.12); color: var(--success); border-color: rgba(63, 185, 80, 0.25); }
+.intent-badge.chat { background: rgba(210, 153, 29, 0.12); color: var(--warning); border-color: rgba(210, 153, 29, 0.25); }
+.intent-badge.plan { background: rgba(88, 166, 255, 0.12); color: var(--accent); border-color: rgba(88, 166, 255, 0.25); }
+.intent-badge.idle { background: rgba(139, 148, 158, 0.12); color: var(--text-muted); border-color: rgba(139, 148, 158, 0.25); }
+
+/* ─── Timeline ─────────────────────────────────────────── */
+.timeline-section {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.timeline-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 6px;
+}
+
+.timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.timeline-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+.timeline-time {
+  color: var(--text-muted);
+  font-size: 10px;
+  flex-shrink: 0;
+  width: 42px;
+}
+
+.timeline-type {
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+.timeline-type.skill_start { color: var(--accent); }
+.timeline-type.skill_complete { color: var(--success); }
+.timeline-type.skill_failed { color: var(--danger); }
+.timeline-type.fallback_activated { color: var(--warning); }
+.timeline-type.loop_detected { color: var(--danger); }
+
+.timeline-detail {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Health Metrics ───────────────────────────────────── */
+.metric-card {
+  text-align: center;
+  padding: 10px 8px;
+  background: var(--bg);
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.metric-value {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+
+.metric-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-top: 2px;
+}
+
+#metric-success .metric-value { color: var(--success); }
+#metric-fallback .metric-value { color: var(--warning); }
+#metric-stuck .metric-value { color: var(--danger); }
+#metric-loop .metric-value { color: var(--danger); }
+
+.metric-value.danger { color: var(--danger) !important; }
+.metric-value.warning { color: var(--warning) !important; }
+.metric-value.good { color: var(--success) !important; }
+
+/* ─── Health State Badge ───────────────────────────────── */
+.health-state-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.health-state-badge.healthy {
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--success);
+  border: 1px solid rgba(63, 185, 80, 0.3);
+}
+
+.health-state-badge.unstable {
+  background: rgba(210, 153, 29, 0.15);
+  color: var(--warning);
+  border: 1px solid rgba(210, 153, 29, 0.3);
+}
+
+.health-state-badge.safe_mode {
+  background: rgba(88, 166, 255, 0.15);
+  color: var(--accent);
+  border: 1px solid rgba(88, 166, 255, 0.3);
+}
+
+.health-state-badge.recovering {
+  background: rgba(210, 153, 29, 0.15);
+  color: var(--warning);
+  border: 1px solid rgba(210, 153, 29, 0.3);
+}
+
+.health-state-badge.starting, .health-state-badge.error, .health-state-badge.unknown {
+  background: rgba(139, 148, 158, 0.15);
+  color: var(--text-muted);
+  border: 1px solid rgba(139, 148, 158, 0.3);
+}
+
+/* ─── Safe Mode Indicator ──────────────────────────────── */
+.safe-mode-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border-radius: 6px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.safe-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-muted);
+}
+
+.safe-dot.active {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+#safe-mode-text {
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* ─── Scrollbar ────────────────────────────────────────── */
+.panel-body::-webkit-scrollbar { width: 4px; }
+.panel-body::-webkit-scrollbar-track { background: transparent; }
+.panel-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}

@@ -1,12 +1,19 @@
 /**
  * ActionDispatcher — maps validated IntentActions to Mineflayer bot API calls.
  * This is the ONLY place where intents become Minecraft actions.
+ *
+ * SINGLE EXECUTION CHAIN GUARD:
+ * Only SkillRouter is authorized to call dispatch(). Direct bot access is forbidden.
+ * The caller token must match a registered authorized caller.
+ *
  * Features: retry with exponential backoff, fallback handling, action queuing.
  */
 import type { BotRef } from "../interfaces/minecraft.js";
 import type { IntentAction, ExecutionResult } from "../interfaces/intent.js";
 import { SafetyGuard } from "./safety-guard.js";
 import { eventBus } from "./event-bus.js";
+import { getEventCollector } from "../observability/event-collector.js";
+import type { BehaviorTimeline } from "../observability/behavior-timeline.js";
 import { Vec3 } from "vec3";
 
 // ─── Config ──────────────────────────────────────────
@@ -21,6 +28,12 @@ const RETRY_CONFIG = {
     "mine_block", "place_block", "use_door", "sleep",
   ]),
 };
+
+// ─── Caller Token Key ────────────────────────────────
+// SkillRouter sets this token on globalThis before dispatching.
+// ActionDispatcher verifies it to prevent bypass.
+
+const CALLER_TOKEN_KEY = "__AIMC_SKILLROUTER_TOKEN__";
 
 // ─── Helpers ─────────────────────────────────────────
 
@@ -45,9 +58,146 @@ export class ActionDispatcher {
   private processing = false;
   private currentAction: QueueEntry | null = null;
 
+  /** Authorized callers: name → token */
+  private authorizedCallers: Map<string, string> = new Map();
+
+  // Phase 6: Observability — timeline for dispatch logging (PURE OBSERVABILITY)
+  private timeline: BehaviorTimeline | null = null;
+
   constructor(bot: BotRef, safety: SafetyGuard) {
     this.bot = bot;
     this.safety = safety;
+  }
+
+  /** Wire observability timeline for dispatch logging (Phase 6). */
+  setTimeline(timeline: BehaviorTimeline): void {
+    this.timeline = timeline;
+  }
+
+  /**
+   * Register an authorized caller. Only registered callers can dispatch actions.
+   * Called by SkillRouter during setDispatcher() wiring.
+   */
+  registerCaller(name: string, token: string): void {
+    this.authorizedCallers.set(name, token);
+    console.log(`[ActionDispatcher] Authorized caller registered: ${name}`);
+  }
+
+  /**
+   * Verify that the current caller is authorized.
+   *
+   * ARCHITECTURE LOCK (Phase 2.6):
+   * This is the HARD gate. No code may call dispatch() without the SkillRouter
+   * token set on globalThis. Violations are logged, emitted as events, and thrown.
+   */
+  private verifyCaller(): void {
+    const archLock = (globalThis as any).__AIMC_ARCH_LOCK__;
+
+    // Check architecture lock is active
+    if (archLock && !archLock.strictMode) {
+      console.warn("[ActionDispatcher] WARNING: __AIMC_ARCH_LOCK__.strictMode is false — guard bypassed");
+      return;
+    }
+
+    // Check globalThis for the caller token set by SkillRouter
+    const activeToken = (globalThis as any)[CALLER_TOKEN_KEY];
+
+    if (!activeToken) {
+      this.reportViolation(
+        "direct_dispatcher_call",
+        "ActionDispatcher.dispatch() called without SkillRouter token. " +
+        "All actions must flow through: AgentCore → SkillRouter → ActionDispatcher → Mineflayer"
+      );
+    }
+
+    // Verify token matches a registered caller
+    const isAuthorized = [...this.authorizedCallers.values()].some((t) => t === activeToken);
+    if (!isAuthorized) {
+      this.reportViolation(
+        "bypass_skill_router",
+        "Unrecognized caller token — only SkillRouter is authorized to dispatch actions."
+      );
+    }
+  }
+
+  /** Report an architecture violation with full diagnostics. */
+  private reportViolation(code: string, message: string): never {
+    const err = new Error();
+    // Capture stack, stripping the verifyCaller/reportViolation frames
+    const stack = err.stack?.split("\n").slice(3).join("\n") || "no stack";
+
+    const violation = {
+      code,
+      message,
+      timestamp: Date.now(),
+      callerStack: stack,
+      violatedModule: this.extractViolatingModule(stack),
+      recommendedFix: "Route all actions through: AgentCore → SkillRouter.route() → ActionDispatcher.dispatch()",
+      archLock: (globalThis as any).__AIMC_ARCH_LOCK__ || null,
+    };
+
+    // Emit violation event for logging/monitoring
+    try {
+      eventBus.emit("system", "arch_violation", violation);
+    } catch {
+      // EventBus might not be initialized yet
+    }
+
+    // Log to console with full context
+    console.error("╔══════════════════════════════════════════╗");
+    console.error("║  AIMC ARCHITECTURE VIOLATION            ║");
+    console.error("╠══════════════════════════════════════════╣");
+    console.error(`║  Code:    ${code}`);
+    console.error(`║  Message: ${message}`);
+    console.error("╠══════════════════════════════════════════╣");
+    console.error("║  Violating module:");
+    console.error(`║    ${violation.violatedModule}`);
+    console.error("╠══════════════════════════════════════════╣");
+    console.error("║  Fix:");
+    console.error("║    AgentCore → SkillRouter → Dispatcher");
+    console.error("╚══════════════════════════════════════════╝");
+
+    throw new Error(
+      `ARCHITECTURE VIOLATION [${code}]: ${message}\n` +
+      `Violating module: ${violation.violatedModule}\n` +
+      `Fix: ${violation.recommendedFix}`
+    );
+  }
+
+  /** Extract the most likely violating module from a stack trace. */
+  private extractViolatingModule(stack: string): string {
+    const lines = stack.split("\n");
+    for (const line of lines) {
+      // Look for AIMC source files in the stack
+      const match = line.match(/\((.*?):(\d+):(\d+)\)/);
+      if (match) {
+        const filePath = match[1];
+        // Skip node_modules and internal modules
+        if (filePath.includes("AIMC") || filePath.includes("src/") || filePath.includes("dist/")) {
+          // Normalize: extract the src-relative path
+          const srcIdx = filePath.lastIndexOf("src/");
+          if (srcIdx !== -1) {
+            return filePath.slice(srcIdx);
+          }
+          const distIdx = filePath.lastIndexOf("dist/");
+          if (distIdx !== -1) {
+            return filePath.slice(distIdx).replace("dist/", "src/").replace(".js", ".ts");
+          }
+          return filePath;
+        }
+      }
+    }
+    return "unknown (check stack trace)";
+  }
+
+  /** Late-binding: replace the bot reference (e.g., after reconnection). */
+  setBot(bot: BotRef): void {
+    this.bot = bot;
+  }
+
+  /** Placeholder for future world state integration. */
+  setWorld(world: unknown): void {
+    // Future: store world state reference for action validation
   }
 
   // ─── Public API ────────────────────────────────────
@@ -60,6 +210,18 @@ export class ActionDispatcher {
    * High-priority (4-5) actions jump to the front of the queue.
    */
   async dispatch(intent: IntentAction): Promise<ExecutionResult> {
+    // ── SINGLE EXECUTION CHAIN GUARD ──
+    this.verifyCaller();
+
+    if (!this.bot?.entity) {
+      return {
+        actionId: intent.id,
+        success: false,
+        message: "Bot not yet spawned — action cannot be executed",
+        interrupted: false,
+        timedOut: false,
+      };
+    }
     return new Promise((resolve) => {
       const entry: QueueEntry = { intent, resolve };
 
@@ -71,6 +233,19 @@ export class ActionDispatcher {
       } else {
         this.queue.push(entry);
       }
+
+      // Phase 6: Record dispatch event to event collector
+      try {
+        const collector = getEventCollector();
+        collector.ingestTimelineEntry({
+          entryId: `dispatch-${intent.id}`,
+          timestamp: Date.now(),
+          eventType: "skill_start",
+          summary: `Dispatch: ${intent.type}`,
+          detail: { actionId: intent.id, type: intent.type, priority: intent.priority },
+          severity: "debug",
+        });
+      } catch { /* never throw */ }
 
       void this.processQueue();
     });

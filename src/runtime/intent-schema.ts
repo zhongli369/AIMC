@@ -141,14 +141,51 @@ const InternalStateSchema = z.object({
   energy: z.number().min(0).max(1).optional(),
 }).optional();
 
+// ─── Skill Intent Schema ──────────────────────────────────────
+
+const SkillIntentSchema = z.object({
+  name: z.string().min(1).max(64),
+  params: z.record(z.string(), z.unknown()).optional(),
+});
+
+// ─── Plan Schema ──────────────────────────────────────────────
+
+const PlanStepSchema = z.object({
+  step: z.number().int().positive(),
+  action: z.string().min(1).max(256),
+  skill: z.string().min(1).max(64).optional(),
+  params: z.record(z.string(), z.unknown()),
+});
+
+const TaskPlanSchema = z.object({
+  goal: z.string().min(1).max(512),
+  steps: z.array(PlanStepSchema).min(1).max(20),
+});
+
+// ─── Agent Intent Schema ──────────────────────────────────────
+
+const AgentIntentSchema = z.enum(["chat", "skill", "plan"]);
+
 // ─── AgentOutput Schema (THE contract) ───────────────────────────
 
 export const AgentOutputSchema = z.object({
+  intent: AgentIntentSchema,
+  skill: SkillIntentSchema.optional(),
+  plan: TaskPlanSchema.optional(),
   speech: SpeechIntentSchema.optional(),
   actions: z.array(IntentActionSchema).max(10),
   memory_save: MemoryCandidateSchema.optional(),
   task_update: TaskStateChangeSchema.optional(),
   internal_state: InternalStateSchema,
+}).superRefine((val, ctx) => {
+  // Coherence check: if intent="skill", skill field must be present
+  if (val.intent === "skill" && !val.skill) {
+    ctx.addIssue({ code: "custom", path: ["skill"], message: 'intent="skill" requires skill field' });
+  }
+  // Coherence check: if intent="plan", plan field must be present
+  if (val.intent === "plan" && !val.plan) {
+    ctx.addIssue({ code: "custom", path: ["plan"], message: 'intent="plan" requires plan field' });
+  }
 });
 
 // ─── Inferred Types ──────────────────────────────────────────────
@@ -199,7 +236,7 @@ export function validateIntentAction(json: unknown): SchemaValidationResult {
   const result = IntentActionSchema.safeParse(json);
 
   if (result.success) {
-    return { valid: true, data: { actions: [result.data] }, errors: [] };
+    return { valid: true, data: { intent: "chat", actions: [result.data] }, errors: [] };
   }
 
   const errors: SchemaValidationError[] = result.error.issues.map((issue) => ({

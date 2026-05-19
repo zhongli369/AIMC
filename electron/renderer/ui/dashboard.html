@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline';">
+  <title>AIMC Dashboard</title>
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  <div class="dashboard">
+    <!-- ── Header ────────────────────────────────────── -->
+    <header>
+      <h1>AIMC Dashboard</h1>
+      <span class="status-badge" id="status-badge">DISCONNECTED</span>
+      <span class="clock" id="clock">--:--:--</span>
+    </header>
+
+    <div class="panels">
+      <!-- ── Panel 1: GameState ───────────────────────── -->
+      <section class="panel" id="panel-gamestate">
+        <div class="panel-header">
+          <h2>Game State</h2>
+          <span class="panel-dot" id="dot-gamestate"></span>
+        </div>
+        <div class="panel-body">
+          <div class="stat-row">
+            <span class="stat-label">Health</span>
+            <div class="bar-bg">
+              <div class="bar-fill health-fill" id="health-bar" style="width:100%"></div>
+            </div>
+            <span class="stat-value" id="health-value">20/20</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Food</span>
+            <div class="bar-bg">
+              <div class="bar-fill food-fill" id="food-bar" style="width:100%"></div>
+            </div>
+            <span class="stat-value" id="food-value">20/20</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Position</span>
+            <span class="stat-value mono" id="pos-value">--, --, --</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Dimension</span>
+            <span class="stat-value" id="dim-value">--</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Inventory</span>
+            <span class="stat-value" id="inv-value">0 items</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Equipped</span>
+            <span class="stat-value" id="equip-value">--</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Panel 2: AI Flow ─────────────────────────── -->
+      <section class="panel" id="panel-aiflow">
+        <div class="panel-header">
+          <h2>AI Flow</h2>
+          <span class="panel-dot" id="dot-aiflow"></span>
+        </div>
+        <div class="panel-body">
+          <div class="intent-badge" id="intent-badge">--</div>
+          <div class="stat-row">
+            <span class="stat-label">Last Skill</span>
+            <span class="stat-value" id="aiflow-skill">--</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Result</span>
+            <span class="stat-value" id="aiflow-result">--</span>
+          </div>
+          <div class="stat-row speech-row">
+            <span class="stat-label">Last Speech</span>
+            <span class="stat-value speech-text" id="aiflow-speech">--</span>
+          </div>
+          <div class="timeline-section">
+            <div class="stat-label timeline-label">Recent Timeline</div>
+            <div class="timeline-list" id="timeline-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Panel 3: System Health ───────────────────── -->
+      <section class="panel" id="panel-health">
+        <div class="panel-header">
+          <h2>System Health</h2>
+          <span class="health-state-badge" id="health-state-badge">STARTING</span>
+        </div>
+        <div class="panel-body">
+          <div class="metric-card" id="metric-success">
+            <div class="metric-value" id="metric-success-val">--%</div>
+            <div class="metric-label">Skill Success</div>
+          </div>
+          <div class="metric-card" id="metric-fallback">
+            <div class="metric-value" id="metric-fallback-val">--%</div>
+            <div class="metric-label">Fallback Rate</div>
+          </div>
+          <div class="metric-card" id="metric-stuck">
+            <div class="metric-value" id="metric-stuck-val">--%</div>
+            <div class="metric-label">Stuck Rate</div>
+          </div>
+          <div class="metric-card" id="metric-loop">
+            <div class="metric-value" id="metric-loop-val">--%</div>
+            <div class="metric-label">Loop Rate</div>
+          </div>
+          <div class="safe-mode-indicator" id="safe-mode-indicator">
+            <span class="safe-dot" id="safe-dot"></span>
+            <span id="safe-mode-text">Safe Mode: OFF</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Total Actions</span>
+            <span class="stat-value" id="total-actions">0</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>
