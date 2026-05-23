@@ -118,22 +118,29 @@ class BotProcessManager extends EventEmitter {
     if (!exePath || typeof exePath !== "string") {
       return { success: false, error: "Invalid exePath: must be a non-empty string." };
     }
-    if (!bridgePath || typeof bridgePath !== "string") {
-      return { success: false, error: "Invalid bridgePath: must be a non-empty string." };
-    }
     if (!cwd || typeof cwd !== "string") {
       return { success: false, error: "Invalid cwd: must be a non-empty string." };
     }
 
     const flags = Array.isArray(electronFlags) ? electronFlags : [];
 
-    // Build spawn args: Electron flags first, then bridge script
-    const spawnArgs = [...flags, bridgePath];
+    // Bot mode: use AIMC_BOT_MODE=1 env var instead of passing bridgePath as CLI arg.
+    // Packaged Electron exe ignores asar-internal paths as entry-point overrides.
+    // Instead, main.cjs detects AIMC_BOT_MODE=1 and requires legacy-bridge.cjs directly.
+    const spawnArgs = [...flags];
+
+    // Build env with bot mode flag + all user-supplied vars
+    const spawnEnv = {
+      ...process.env,
+      AIMC_BOT_MODE: "1",
+      ...env,
+    };
 
     // Log spawn configuration
     console.log("[BotProcessManager] Spawn configuration:");
+    console.log("  mode:         BOT (AIMC_BOT_MODE=1)");
     console.log("  exePath:", exePath);
-    console.log("  bridgePath:", bridgePath);
+    console.log("  bridgePath:", bridgePath, "(loaded via main.cjs bot mode)");
     console.log("  cwd:", cwd);
     console.log("  cwd is real dir:", require("fs").existsSync(cwd));
     console.log("  electronFlags:", flags);
@@ -145,7 +152,7 @@ class BotProcessManager extends EventEmitter {
     try {
       this._process = spawn(exePath, spawnArgs, {
         cwd,
-        env: { ...process.env, ...env },
+        env: spawnEnv,
         stdio: ["pipe", "pipe", "pipe"],
         detached: false,
         shell: false,

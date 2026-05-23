@@ -61,6 +61,22 @@ console.log("[BRIDGE] Dist index:", distIndex);
 console.log("[BRIDGE] Legacy settings:", legacySettingsPath);
 console.log("[BRIDGE] mcdata:", mcdataPath);
 
+// ── Filesystem diagnostics ─────────────────
+const __isAsar = __dirname.includes(".asar");
+console.log("[BRIDGE] __isAsar:", __isAsar);
+console.log("[BRIDGE] __dirname:", __dirname);
+console.log("[BRIDGE] process.cwd:", process.cwd());
+
+// Check if each critical file exists on disk
+[distIndex, legacySettingsPath, mcdataPath, safetyGuardPath, dispatcherPath, skillRouterPath, skillRegistryPath].forEach(p => {
+  try {
+    const exists = require("fs").existsSync(p);
+    console.log(`[BRIDGE]   fs.existsSync(${path.basename(p)}): ${exists} — ${p}`);
+  } catch (e) {
+    console.log(`[BRIDGE]   fs.existsSync(${path.basename(p)}): ERROR — ${e.message}`);
+  }
+});
+
 // ═══════════════════════════════════════════════════════════
 // 3. Environment diagnostics — verify API keys and settings
 // ═══════════════════════════════════════════════════════════
@@ -232,6 +248,9 @@ runtime.bootstrap(async () => {
     console.log("[BRIDGE] ✓ Step A: Legacy settings populated.");
   } catch (err) {
     console.error("[BRIDGE] ✗ Step A FAILED:", err.message);
+    console.error("[BRIDGE]   err.code:", err.code);
+    console.error("[BRIDGE]   err.stack:", err.stack);
+    console.error("[BRIDGE]   target path:", legacySettingsPath);
     // Fatal — cannot create bot without settings
     return;
   }
@@ -246,7 +265,9 @@ runtime.bootstrap(async () => {
     console.log("[BRIDGE]   Plugins: pathfinder, pvp, collectblock, autoEat, armorManager");
   } catch (err) {
     console.error("[BRIDGE] ✗ Step B FAILED:", err.message);
-    console.error(err.stack);
+    console.error("[BRIDGE]   err.code:", err.code);
+    console.error("[BRIDGE]   err.stack:", err.stack);
+    console.error("[BRIDGE]   target path:", mcdataPath);
     return;
   }
 
@@ -385,7 +406,9 @@ runtime.bootstrap(async () => {
       );
     } catch (err) {
       console.error("[BRIDGE] ✗ AgentCore pipeline init failed:", err.message);
-      console.error(err.stack);
+      console.error("[BRIDGE]   err.code:", err.code);
+      console.error("[BRIDGE]   err.stack:", err.stack);
+      console.error("[BRIDGE]   distIndex:", distIndex);
     }
   } else {
     console.log(`[BRIDGE] △ Step D-F: AgentCore skipped — no API key for model: ${model}`);

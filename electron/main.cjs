@@ -6,13 +6,44 @@
  *   BotProcessManager → spawn, lifecycle, error classification
  *   main.cjs → window, IPC, config, glue
  *
+ * Two modes:
+ *   NORMAL (default):  Launcher UI window
+ *   BOT (AIMC_BOT_MODE=1): Directly loads legacy-bridge.cjs, no window
+ *
  * All paths are dynamically resolved. No hardcoded paths.
  * cwd is guaranteed to be a real filesystem path (never inside ASAR).
  */
 
-const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const fs = require("fs");
+
+// ═══════════════════════════════════════════════════════════════
+// BOT MODE — runs before any Electron app initialization
+// When AIMC_BOT_MODE=1, directly execute the bridge script as a
+// headless bot container. No windows, no renderer, no IPC.
+// ═══════════════════════════════════════════════════════════════
+
+if (process.env.AIMC_BOT_MODE === "1") {
+  console.log("[main.cjs] AIMC_BOT_MODE=1 detected — entering bot container mode.");
+  console.log("[main.cjs] __dirname:", __dirname);
+  console.log("[main.cjs] Loading legacy-bridge.cjs...");
+
+  // Directly require the bridge — it will keep the event loop alive.
+  // No app.whenReady(), no BrowserWindow, no IPC.
+  require("./legacy-bridge.cjs");
+
+  // require() returns after bootstrap() is scheduled (async, fire-and-forget).
+  // The bridge's keepAlive() setInterval holds the event loop open.
+  // We must NOT return to the caller — we stay here forever.
+  // If require() returns synchronously, the event loop stays alive via the bridge.
+  return;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NORMAL MODE — Launcher UI
+// ═══════════════════════════════════════════════════════════════
+
+const { app, BrowserWindow, ipcMain } = require("electron");
 
 const {
   validate: validatePaths,

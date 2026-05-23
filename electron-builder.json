@@ -12,7 +12,9 @@
     "dist/**/*",
     "electron/**/*",
     "config/**/*",
-    "package.json"
+    "package.json",
+    "src/legacy/agent/settings.js",
+    "src/legacy/utils/mcdata.js"
   ],
 
   "asar": true,
