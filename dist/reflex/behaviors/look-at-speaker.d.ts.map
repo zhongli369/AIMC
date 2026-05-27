@@ -1,0 +1,1 @@
+{"version":3,"file":"look-at-speaker.d.ts","sourceRoot":"","sources":["../../../src/reflex/behaviors/look-at-speaker.ts"],"names":[],"mappings":"AAAA;;;;;GAKG;AAEH,OAAO,KAAK,EAAE,cAAc,EAA+B,MAAM,sBAAsB,CAAC;AAIxF,MAAM,WAAW,mBAAmB;IAClC,WAAW,EAAE,MAAM,CAAC;CACrB;AAMD,wBAAgB,mBAAmB,CACjC,MAAM,GAAE,OAAO,CAAC,mBAAmB,CAAM,GACxC,cAAc,CAuEhB"}

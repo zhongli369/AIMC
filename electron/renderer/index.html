@@ -57,6 +57,13 @@
               <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
               <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
             </optgroup>
+            <optgroup label="Doubao (豆包)">
+              <option value="doubao-seed-1-6">豆包 Seed 1.6</option>
+              <option value="doubao-seed-1-6-lite">豆包 Seed 1.6 Lite</option>
+              <option value="doubao-seed-1-6-flash">豆包 Seed 1.6 Flash</option>
+              <option value="doubao-seed-2-0-pro">豆包 Seed 2.0 Pro</option>
+              <option value="doubao-seed-2-0-lite">豆包 Seed 2.0 Lite</option>
+            </optgroup>
             <optgroup label="Other">
               <option value="mistral-large">Mistral Large</option>
               <option value="grok-3">Grok 3</option>
@@ -64,6 +71,11 @@
             </optgroup>
           </select>
         </div>
+      </div>
+
+      <div class="field" id="doubao-endpoint-group" style="display:none">
+        <label for="doubaoEndpointId">豆包推理接入点 ID (ep-xxx)</label>
+        <input type="text" id="doubaoEndpointId" placeholder="ep-xxxxxxxxxx" autocomplete="off">
       </div>
     </form>
 
@@ -83,6 +95,9 @@
       <div class="chat-bar">
         <input type="text" id="chat-input" class="chat-input" placeholder="Type a message to the bot..." disabled autocomplete="off">
         <button id="btn-send" class="btn btn-send" disabled>Send</button>
+        <button id="btn-mic" class="btn btn-mic" disabled title="Record voice (hold/click to toggle)">&#x1F3A4;</button>
+        <span id="voice-status" class="voice-status hidden"></span>
+        <button id="btn-voice-sim" class="btn btn-voice-sim" disabled title="Send as voice_sim (dev-only)">VS</button>
       </div>
     </div>
   </div>

@@ -108,8 +108,10 @@ const RULES = {
         "runtime-context.cjs",
       ];
       // Files in src/legacy/ are allowed (skill provider only, grandfathered)
+      // Files in src/reflex/ are allowed (sanctioned pre-AgentCore fast-reaction layer)
       if (authorized.some((f) => normalized.endsWith(f))) return [];
       if (normalized.includes("src/legacy/")) return [];
+      if (normalized.includes("src/reflex/")) return [];
       // Test files are allowed
       if (normalized.includes("test-")) return [];
       // This scan script

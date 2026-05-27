@@ -1,54 +1,28 @@
 # CLAUDE.md — AI Minecraft Companion (AIMC)
 
-Production-grade AI teammate for Minecraft. LLM-driven agent with structured intent pipeline, skill system, safety guard, voice pipeline, team coordination, role specialization, relationship memory, cooperative autonomy, behavior arbitration, stability recovery, observability, runtime config, Electron dashboard UI, and one-click production release. Default language: Chinese (中文).
+LLM-driven Minecraft agent. Execution topology permanently frozen. Default language: Chinese (中文).
+
+If code and this document conflict, **this document is authority — update it first, or reject the code.**
 
 ---
 
-## RUNTIME TRUTH MODEL
-
-If code and this document conflict, **this document must be updated first, or the code must be rejected.**
-
-### Canonical Execution Chain (ONLY valid path)
+## Canonical Execution Chain (ONLY valid path)
 
 ```
 User Input / Proactive Tick / Voice Input / Team Context
-        │
-        ▼
-AgentCore.think()          ← Sole AI brain. Assembles context from soft layers, generates AgentOutput.
-        │
-        ▼
-RuntimeCore.validate()     ← Zod + SafetyGuard. VALIDATION ONLY — zero execution.
-        │
-        ▼
-BehaviorArbitrator         ← Resolves conflicting soft-layer signals → single ranked action list.
-        │
-        ▼
-SkillRouter.route()        ← Sole execution entry. Sets token → retry + fallback + telemetry.
-        │
-        ▼
-ActionDispatcher.dispatch() ← Sole bot controller. verifyCaller() token-gated.
-        │
-        ▼
-Mineflayer Bot
+  → AgentCore.think()            ← Sole AI brain
+  → RuntimeCore.validate()       ← Zod + SafetyGuard, VALIDATION ONLY
+  → BehaviorArbitrator           ← Resolves soft-layer conflicts → ranked action list
+  → SkillRouter.route()          ← Sole execution entry, token-gated
+  → ActionDispatcher.dispatch()  ← Sole bot controller, verifyCaller() token-gated
+  → Mineflayer Bot
 ```
 
 **No other execution path exists at runtime.**
 
-### Module Roles
-
-| Module | Role |
-|--------|------|
-| `AgentCore` | Sole AI brain — reasoning, context assembly, AgentOutput generation |
-| `RuntimeCore` | **Validate only** — Zod schema + SafetyGuard |
-| `SkillRouter` | Sole execution entry — intent → skill/chat/plan, token, retry, fallback |
-| `ActionDispatcher` | Sole bot controller — token-gated, sole owner of `bot.*()` |
-| `RuntimeContext` | Sole state source — `__botState__` (~20Hz) |
-| Soft layers | **Passive influence only** — context injection, weight/timing biases, NEVER execute |
-| `src/legacy/` | **DEAD CODE** — only `settings.js` + `mcdata.js` active |
-
 ---
 
-## ARCHITECTURE INVARIANTS (NON-NEGOTIABLE)
+## Architecture Invariants (NON-NEGOTIABLE)
 
 | # | Invariant |
 |---|-----------|
@@ -60,28 +34,24 @@ Mineflayer Bot
 | I-6 | All execution passes token gate: `__AIMC_ARCH_LOCK__.strictMode === true` |
 | I-7 | All state originates from `RuntimeContext` |
 | I-8 | `__AIMC_ARCH_LOCK__` is immutable at runtime |
-| I-9 | Legacy code is dead — zero instantiation |
+| I-9 | Legacy code is dead — only `settings.js` + `mcdata.js` active |
 | I-10 | All new code is TypeScript strict mode |
 
 ---
 
-## SELF-AUDIT CHECKLIST
+## Self-Audit (before ANY code change — any YES = REJECT)
 
-**Before ANY code change, answer these 5 questions. Any YES = REJECT.**
+1. Does this introduce a second execution path?
+2. Does this bypass `SkillRouter.route()`?
+3. Does this modify `ActionDispatcher` security/token logic?
+4. Does this introduce direct `bot.*` access outside `ActionDispatcher`?
+5. Does this modify the runtime chain order?
 
-| # | Question |
-|---|----------|
-| 1 | Does this introduce a second execution path? |
-| 2 | Does this bypass `SkillRouter.route()`? |
-| 3 | Does this modify `ActionDispatcher` security/token logic? |
-| 4 | Does this introduce direct `bot.*` access outside `ActionDispatcher`? |
-| 5 | Does this modify the runtime chain order? |
-
-Secondary: new globalThis property → document in GlobalThis Registry. New skill → register in SkillRegistry. AgentOutput schema change → update RuntimeCore validation first. `src/legacy/` touch → verify it's only `settings.js` or `mcdata.js`.
+Secondary: new globalThis → document. New skill → register in SkillRegistry. AgentOutput schema change → update RuntimeCore validation first.
 
 ---
 
-## FORBIDDEN (architecture violation)
+## Forbidden
 
 - New AI loops, execution pipelines, parallel agent systems
 - Direct bot control outside ActionDispatcher
@@ -92,85 +62,24 @@ Secondary: new globalThis property → document in GlobalThis Registry. New skil
 
 ---
 
-## EXECUTION SECURITY MODEL
+## Execution Security
 
 | Layer | Guardian | Mechanism |
 |-------|----------|-----------|
 | Build guard | `scripts/arch-guard-scan.cjs` | 5 rules static analysis |
 | Build drift | `scripts/arch-drift-scan.cjs` | 15 rules, 4 groups |
 | Bootstrap | `legacy-bridge.cjs` | Sets `__AIMC_ARCH_LOCK__` v2.8-frozen |
-| Caller gate | `SkillRouter` | Sets `__AIMC_SKILLROUTER_TOKEN__` before dispatch |
-| Dispatch gate | `ActionDispatcher.verifyCaller()` | Checks token + strictMode |
-
-Token flow: `SkillRouter sets token → dispatch → verifyCaller() checks → SkillRouter clears token`. Violation emits `system:arch_violation`.
+| Caller gate | `SkillRouter` | Sets token → dispatch → verifyCaller() → clears token |
 
 ---
 
-## SKILL SYSTEM
+## Skill System
 
-### 8 Core Skills
-
-| Skill | Category | Fallback |
-|-------|----------|----------|
-| `follow_player` | movement | `explore_area` |
-| `mine_resource` | gathering | `explore_area` |
-| `attack_target` | combat | `defend_player` |
-| `gather_food` | gathering | `collect_items` |
-| `build_shelter` | building | — |
-| `collect_items` | gathering | — |
-| `explore_area` | movement | — |
-| `defend_player` | combat | — |
-
-### Execution Model
-
-- Retry: max 2 per action, 100→300→600ms backoff
-- Fallback: max 2-hop chain. A→B→C stops at C.
-- Telemetry: `AIMC_SKILL_TRACE` JSON to stdout (side-effect only)
-- Plan step lifecycle: `pending → running → success/failed/retrying/skipped`
-- Skills execute ONLY through `SkillRouter.route()`, NEVER call `ActionDispatcher` or `bot.*` directly
+8 core skills. Retry: max 2, 100→300→600ms backoff. Fallback: max 2-hop chain. Skills execute ONLY through `SkillRouter.route()`, NEVER call `ActionDispatcher` or `bot.*` directly.
 
 ---
 
-## PHASE HISTORY (all complete)
-
-1→2→2.5→2.6→2.7→2.8 (System Freeze) → 3 (AgentCore + DeepSeek) → 3-A/B/C (Reliability/Docs/Drift) → 4-A/B/C/D/E/F/G (Voice/Tactical/Role/Memory/Coop/Arbitration) → 5 (Stability) → 6 (Observability) → 0.5 (Config) → P1 (UI Dashboard) → P2 (Production Release)
-
-**Topology permanently frozen:** `AgentCore → RuntimeCore.validate → SkillRouter → ActionDispatcher → Mineflayer`. All extensions are soft influence layers (context injection, weight/timing bias). 170 source files, 0 violations, 0 drift.
-
----
-
-## SOFT INFLUENCE LAYERS (passive only)
-
-Personality, Emotion, Social, Proactive, Heuristic, Voice (STT/TTS), Voice Pressure, Tactical, Support, Role, Relationship, Shared Experience, Memory Callbacks, Intent Prediction, Proactive Support, Formation, Mining, Combat, Arbitration, Stuck Detection, Loop Detection, Skill Backoff, Safe Mode, Runtime Trace, Behavior Timeline, System Health, Event Collector, Exporter, UI State Bridge, Voice Profile.
-
-All layers inject context or influence weights/timing. They NEVER execute actions or bypass SkillRouter.
-
----
-
-## GLOBALTHIS REGISTRY
-
-| Property | Set by | Classification |
-|----------|--------|----------------|
-| `__botState__` | `runtime-context.cjs` | NECESSARY |
-| `__BOT__` | `legacy-bridge.cjs` | RISK — token-gated |
-| `__ACTION_DISPATCHER__` | `legacy-bridge.cjs` | LOW RISK |
-| `__WORLD_STATE__` | `legacy-bridge.cjs` | NECESSARY |
-| `__RUNTIME_CONTEXT__` | `legacy-bridge.cjs` | NECESSARY |
-| `__SKILL_ROUTER__` | `legacy-bridge.cjs` | LOW RISK |
-| `__SKILL_REGISTRY__` | `legacy-bridge.cjs` | LOW RISK |
-| `__AIMC_ARCH_LOCK__` | `legacy-bridge.cjs` | NECESSARY |
-| `__AIMC_SKILLROUTER_TOKEN__` | `skill-router.ts` | NECESSARY |
-| `__aimc__` | `src/index.ts` | LOW RISK |
-
----
-
-## LEGACY CODE
-
-**ACTIVE:** `agent/settings.js`, `utils/mcdata.js` only. **DEAD:** ~7500 lines (agent.js, coder.js, action_manager.js, conversation.js, modes.js, npc/**, vision/**, mindcraft/**, commands/** etc.) — zero runtime references.
-
----
-
-## COMMANDS
+## Commands
 
 ```bash
 npm run build       # arch-guard → arch-drift → typecheck → compile → precheck → pack
@@ -184,7 +93,7 @@ Package release: `npx electron-builder --dir`
 
 ---
 
-## CRITICAL RULES
+## Critical Rules
 
 1. **AgentCore** is the ONLY AI decision system.
 2. **SkillRouter** is the ONLY behavior entry point.

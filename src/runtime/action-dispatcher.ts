@@ -15,6 +15,9 @@ import { eventBus } from "./event-bus.js";
 import { getEventCollector } from "../observability/event-collector.js";
 import type { BehaviorTimeline } from "../observability/behavior-timeline.js";
 import { Vec3 } from "vec3";
+import { createRequire } from "module";
+const require_ = createRequire(import.meta.url);
+const pf = require_("mineflayer-pathfinder");
 
 // ─── Config ──────────────────────────────────────────
 
@@ -455,7 +458,7 @@ export class ActionDispatcher {
         // ── Movement ──────────────────────────
         case "move_to": {
           const { x, y, z } = t as { x: number; y: number; z: number };
-          const GoalNear = (this.bot.pathfinder as any).goals.GoalNear;
+          const GoalNear = pf.goals.GoalNear;
           await this.bot.pathfinder.goto(new GoalNear(x, y, z, 1));
           break;
         }
@@ -464,7 +467,7 @@ export class ActionDispatcher {
           const { playerName } = t as { playerName: string };
           const player = this.bot.players[playerName]?.entity;
           if (!player) return fail(intent, `Player "${playerName}" not found`);
-          const GoalFollow = (this.bot.pathfinder as any).goals.GoalFollow;
+          const GoalFollow = pf.goals.GoalFollow;
           await this.bot.pathfinder.goto(new GoalFollow(player, 2));
           break;
         }
@@ -491,7 +494,7 @@ export class ActionDispatcher {
           const farX = botPos.x + (dx / len) * 10;
           const farZ = botPos.z + (dz / len) * 10;
 
-          const GoalNearXZ = (this.bot.pathfinder as any).goals.GoalNearXZ;
+          const GoalNearXZ = pf.goals.GoalNearXZ;
           await this.bot.pathfinder.goto(new GoalNearXZ(farX, farZ, 2));
           break;
         }
@@ -506,7 +509,7 @@ export class ActionDispatcher {
             maxDistance: 50,
           });
           if (!surface) return fail(intent, "No path to surface found");
-          const GoalBlock = (this.bot.pathfinder as any).goals.GoalBlock;
+          const GoalBlock = pf.goals.GoalBlock;
           await this.bot.pathfinder.goto(new GoalBlock(surface.position.x, surface.position.y, surface.position.z));
           break;
         }
@@ -577,7 +580,7 @@ export class ActionDispatcher {
             const dx = bx - hostile.position.x;
             const dz = bz - hostile.position.z;
             const len = Math.sqrt(dx * dx + dz * dz) || 1;
-            const GoalNearXZ = (this.bot.pathfinder as any).goals.GoalNearXZ;
+            const GoalNearXZ = pf.goals.GoalNearXZ;
             await this.bot.pathfinder.goto(new GoalNearXZ(
               bx + (dx / len) * 15,
               bz + (dz / len) * 15,
@@ -658,6 +661,7 @@ export class ActionDispatcher {
           break;
         }
 
+        case "stay":
         case "wait": {
           const ms = Math.min((t as any).ms || 1000, 30000);
           await new Promise((r) => setTimeout(r, ms));

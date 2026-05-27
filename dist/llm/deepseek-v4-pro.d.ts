@@ -12,6 +12,8 @@ export interface DeepSeekConfig {
     temperature: number;
     /** Max output tokens */
     maxTokens: number;
+    /** Whether the provider supports response_format json_object (default true) */
+    supportsJsonFormat?: boolean;
 }
 export interface DeepSeekResult {
     success: boolean;

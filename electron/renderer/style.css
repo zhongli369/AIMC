@@ -340,6 +340,85 @@ header .subtitle {
   background: #79c0ff;
 }
 
+/* ─── Mic Button ─────────────────────────────────────── */
+.btn-mic {
+  background: transparent;
+  border-color: var(--text-muted);
+  color: var(--text-muted);
+  font-size: 16px;
+  padding: 5px 10px;
+  line-height: 1;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.btn-mic:hover:not(:disabled) {
+  background: var(--bg-card);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-mic.recording {
+  background: rgba(248, 81, 73, 0.2);
+  border-color: var(--danger);
+  color: var(--danger);
+  animation: mic-pulse 1s ease-in-out infinite;
+}
+
+.btn-mic.transcribing {
+  background: rgba(210, 153, 29, 0.15);
+  border-color: var(--warning);
+  color: var(--warning);
+  animation: mic-pulse 1.5s ease-in-out infinite;
+}
+
+.btn-mic:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248, 81, 73, 0.4); }
+  50% { box-shadow: 0 0 0 5px rgba(248, 81, 73, 0); }
+}
+
+/* ─── Voice Status ───────────────────────────────────── */
+.voice-status {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  padding: 4px 0;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.voice-status.hidden {
+  display: none;
+}
+
+.voice-status.ok { color: var(--success); }
+.voice-status.warn { color: var(--warning); }
+.voice-status.err { color: var(--danger); }
+
+.btn-voice-sim {
+  background: transparent;
+  border-color: var(--warning);
+  color: var(--warning);
+  font-size: 11px;
+  padding: 7px 10px;
+  font-weight: 700;
+}
+
+.btn-voice-sim:hover:not(:disabled) {
+  background: rgba(210, 153, 29, 0.15);
+  border-color: #e2b041;
+}
+
+.btn-voice-sim:disabled {
+  opacity: 0.3;
+}
+
 /* ─── Scrollbar ──────────────────────────────────────── */
 .console-output::-webkit-scrollbar {
   width: 6px;

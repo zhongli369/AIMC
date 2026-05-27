@@ -67,6 +67,17 @@ function resolveBridgePath() {
  *     This is always a real filesystem path in both dev and packaged builds.
  */
 function resolveCwd() {
+  // In dev mode (not packaged), the project root is parent of __dirname.
+  // The exe lives in node_modules/electron/dist/ — which has no package.json.
+  // We must point to the directory that contains our "main": "electron/main.cjs".
+  if (!app.isPackaged) {
+    const projectRoot = path.join(__dirname, "..");
+    if (fs.existsSync(path.join(projectRoot, "package.json"))) {
+      return projectRoot;
+    }
+  }
+
+  // Packaged mode: the exe is next to resources/app.asar, so exe dir is the right cwd.
   const exePath = resolveExePath();
   if (!exePath) return null;
 

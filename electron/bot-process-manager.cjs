@@ -127,7 +127,8 @@ class BotProcessManager extends EventEmitter {
     // Bot mode: use AIMC_BOT_MODE=1 env var instead of passing bridgePath as CLI arg.
     // Packaged Electron exe ignores asar-internal paths as entry-point overrides.
     // Instead, main.cjs detects AIMC_BOT_MODE=1 and requires legacy-bridge.cjs directly.
-    const spawnArgs = [...flags];
+    // cwd MUST be the last argument so Electron knows which app to load (dev mode).
+    const spawnArgs = [...flags, cwd];
 
     // Build env with bot mode flag + all user-supplied vars
     const spawnEnv = {
@@ -223,6 +224,10 @@ class BotProcessManager extends EventEmitter {
 
     // ── Exit handler ─────────────────────────────────
     this._process.on("exit", (code) => {
+      // Clean up IPC files for this bot
+      if (this._process && this._process.pid) {
+        this._cleanupIpcFiles(this._process.pid);
+      }
       this._running = false;
       this._exitCode = code;
       this._process = null;
@@ -248,6 +253,10 @@ class BotProcessManager extends EventEmitter {
     if (!this.running || !this._process) {
       return { success: false, error: "Bot process is not running." };
     }
+
+    // ── Clean up IPC files before killing ────────────
+    const pid = this._process.pid;
+    this._cleanupIpcFiles(pid);
 
     try {
       const killed = this._process.kill("SIGTERM");
@@ -336,30 +345,87 @@ class BotProcessManager extends EventEmitter {
   }
 
   /**
-   * Send a chat message to the bot process via stdin.
+   * Write an IPC message to the bot via atomic temp file.
+   * Atomic: writes .tmp first, then renames to .json — bot never sees partial writes.
+   * @param {Object} msg — { type, traceId, message, timestamp }
+   * @returns {{ success: boolean, error?: string }}
+   */
+  _writeIpcFile(msg) {
+    if (!this.running || !this._process) {
+      return { success: false, error: "Bot is not running." };
+    }
+
+    const pid = this._process.pid;
+    const os = require("os");
+    const path = require("path");
+    const fs = require("fs");
+    const filePath = path.join(os.tmpdir(), `aimc-ipc-${pid}.json`);
+    const tmpPath = path.join(os.tmpdir(), `aimc-ipc-${pid}.tmp`);
+
+    console.log(`[IPC-FILE] write queued type=${msg.type} traceId=${msg.traceId}`);
+
+    try {
+      const payload = JSON.stringify(msg);
+      fs.writeFileSync(tmpPath, payload, "utf-8");
+      fs.renameSync(tmpPath, filePath);
+      console.log(`[IPC-FILE] write committed path=${filePath}`);
+      return { success: true };
+    } catch (err) {
+      // Clean up tmp on failure
+      try { fs.unlinkSync(tmpPath); } catch (_) {}
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Clean up IPC temp files for a given bot PID.
+   * @param {number} pid
+   */
+  _cleanupIpcFiles(pid) {
+    if (!pid) return;
+    try {
+      const os = require("os");
+      const path = require("path");
+      const fs = require("fs");
+      const filePath = path.join(os.tmpdir(), `aimc-ipc-${pid}.json`);
+      const tmpPath = path.join(os.tmpdir(), `aimc-ipc-${pid}.tmp`);
+      try { fs.unlinkSync(filePath); } catch (_) {}
+      try { fs.unlinkSync(tmpPath); } catch (_) {}
+      console.log(`[IPC-FILE] cleanup ok/warn pid=${pid}`);
+    } catch (err) {
+      console.warn("[IPC-FILE] cleanup warn:", err.message);
+    }
+  }
+
+  /**
+   * Send a voice_sim message to the bot via file IPC (dev-only).
+   * @param {string} message
+   * @param {string} [traceId]
+   * @returns {{ success: boolean, error?: string }}
+   */
+  sendVoiceSim(message, traceId) {
+    return this._writeIpcFile({
+      type: "voice_sim",
+      traceId: traceId || ("debug-" + Date.now().toString(36)),
+      message: String(message).trim(),
+      timestamp: Date.now(),
+      source: "launcher_ui",
+    });
+  }
+
+  /**
+   * Send a chat message to the bot via file IPC.
    * @param {string} message
    * @returns {{ success: boolean, error?: string }}
    */
   sendChat(message) {
-    if (!this.running || !this._process || !this._process.stdin.writable) {
-      return {
-        success: false,
-        error: "Bot is not running or stdin is closed.",
-      };
-    }
-
-    try {
-      this._process.stdin.write(
-        JSON.stringify({
-          type: "chat",
-          message: String(message).trim(),
-          source: "player",
-        }) + "\n"
-      );
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: err.message };
-    }
+    return this._writeIpcFile({
+      type: "ui_chat",
+      traceId: "chat-" + Date.now().toString(36),
+      message: String(message).trim(),
+      timestamp: Date.now(),
+      source: "launcher_ui",
+    });
   }
 }
 

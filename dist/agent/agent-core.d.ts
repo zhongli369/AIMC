@@ -92,6 +92,9 @@ export declare class AgentCore {
     private proactiveEngine;
     private taskPlanner;
     private proactiveTimer;
+    private proactiveRunning;
+    private proactiveIntervalMs;
+    private lastUserInteraction;
     private skillRouter;
     constructor(runtimeCore: RuntimeCore, deepseekConfig: DeepSeekConfig, config?: Partial<AgentCoreConfig>);
     /** Wire Phase 5 memory backend into the agent. */
@@ -209,10 +212,17 @@ export declare class AgentCore {
     cancelActiveRequest(): void;
     getState(): AgentState;
     isBusy(): boolean;
+    /** Record a user interaction timestamp — gates proactive ticks (Phase 5B). */
+    recordUserInteraction(): void;
     /**
      * Periodic proactive evaluation — generates autonomous intents
      * based on personality, emotion, and current game state.
      * ALL proactive actions route through RuntimeCore.validate() → SkillRouter.route().
+     *
+     * Phase 5B skip rules (user interaction always wins):
+     *   1. Agent busy thinking/executing → skip
+     *   2. Previous proactive tick still running → skip
+     *   3. User interaction within last 15s → skip
      */
     private proactiveTick;
     /**

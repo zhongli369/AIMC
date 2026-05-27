@@ -210,7 +210,12 @@ export function initPersonality(params: {
       proactive: proactiveEngine,
       tasks: taskPlanner,
     });
-    agentCore.startProactiveLoop(params.proactiveIntervalMs || 5000);
+    const proactiveMs = params.proactiveIntervalMs ?? 5000;
+    if (proactiveMs > 0) {
+      agentCore.startProactiveLoop(proactiveMs);
+    } else {
+      console.log("[AIMC] Proactive loop NOT started — proactiveIntervalMs=0");
+    }
   }
 
   // Wire memory into social engine
@@ -471,6 +476,12 @@ function updateBridge(): void {
     callbackGenerator,
     getRelationship: () => ({ relationship: relationshipEngine, experiences: sharedExperiences, callbacks: callbackGenerator }),
     getProduction: () => ({ profiler, tokenTracker, heuristicEngine, watchdog, recoveryManager }),
+    getBotState: () =>
+      (globalThis as any).__botState__ ??
+      (globalThis as any).__RUNTIME_CONTEXT__?.getSnapshot?.()?.bot ??
+      null,
+    getNearbyEntities: () =>
+      (globalThis as any).__RUNTIME_CONTEXT__?.getNearbyEntities?.() ?? [],
     uiBridge,
     getUIBridge: () => uiBridge,
   };

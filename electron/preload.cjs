@@ -30,6 +30,20 @@ contextBridge.exposeInMainWorld("aimc", {
 
   // ─── Chat (renderer → AgentCore) ─────────────────────
   sendChat: (message) => ipcRenderer.invoke("chat:send", message),
+  // ─── Voice Sim (dev-only debug) ───────────────────────
+  sendVoiceSim: (message, traceId) => ipcRenderer.invoke("voice:sim", message, traceId),
+
+  // ─── Voice Recording (Phase 4B: microphone → whisper → file IPC) ──
+  checkVoiceReady: () => ipcRenderer.invoke("voice:check-ready"),
+  transcribeAudio: (pcmBuffer, metadata) =>
+    ipcRenderer.invoke("voice:transcribe", pcmBuffer, metadata),
+  cancelTranscription: (traceId) =>
+    ipcRenderer.invoke("voice:cancel", traceId),
+  onVoiceResult: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on("voice:result", handler);
+    return () => ipcRenderer.removeListener("voice:result", handler);
+  },
   onChatResponse: (callback) => {
     const handler = (_event, data) => callback(data);
     ipcRenderer.on("bot:chat-response", handler);

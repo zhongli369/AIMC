@@ -8,11 +8,12 @@ import type { Bot } from "mineflayer";
 // Mineflayer plugins extend Bot.prototype at runtime; the stock
 // Bot type does not include them, so we widen the reference here.
 
-export interface BotRef extends Bot {
+export interface BotRef extends Omit<Bot, "pathfinder"> {
   pathfinder: {
     goto: (goal: unknown) => Promise<void>;
     stop: () => void;
-    goals: Record<string, new (...args: any[]) => unknown>;
+    setMovements: (movements: unknown) => void;
+    setGoal: (goal: unknown, dynamic?: boolean) => void;
   };
   pvp: {
     attack: (entity: unknown) => void;

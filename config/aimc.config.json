@@ -29,6 +29,7 @@
   },
 
   "voice": {
+    "voiceEnabled": false,
     "pressureSensitivity": 1.0,
     "enableVoiceTimingBias": true
   },

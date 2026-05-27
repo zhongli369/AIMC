@@ -50,6 +50,18 @@ export declare class StreamParser {
     private extractBraceObject;
     private stripMarkdownFences;
     /**
+     * Apply conservative repairs to malformed LLM JSON output.
+     * Only fixes structural issues — never changes semantic content.
+     * Safe: repairs only enable JSON.parse to succeed; Zod still validates.
+     */
+    private repairJson;
+    /**
+     * Extract a speech-only ValidatedAgentOutput from raw LLM text buffer.
+     * Used as a last resort when JSON repair also fails.
+     * Returns null if no recognizable speech text is found.
+     */
+    private extractSpeechFromBuffer;
+    /**
      * Heuristic: check if the extracted JSON is definitively malformed
      * (as opposed to incomplete — still collecting chunks).
      */

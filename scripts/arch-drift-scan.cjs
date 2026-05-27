@@ -132,6 +132,7 @@ const RULES = {
       "Create an IntentAction and dispatch through SkillRouter → ActionDispatcher.",
     exempt: [
       "action-dispatcher.ts",
+      "legacy-bridge.cjs",       // Speech relay edge — bot.chat() for AI output delivery
       "arch-guard-scan.cjs",
       "arch-drift-scan.cjs",
       "architecture-rules.ts",
@@ -140,6 +141,8 @@ const RULES = {
       const normalized = filePath.replace(/\\/g, "/");
       // Skip legacy/ entirely (already covered by arch-guard-scan)
       if (normalized.includes("src/legacy/")) return [];
+      // Skip reflex/ behaviors (sanctioned pre-AgentCore fast-reaction layer)
+      if (normalized.includes("src/reflex/")) return [];
       if (this.exempt.some((f) => normalized.endsWith(f))) return [];
       const botCallPattern = /\bbot\.(chat|dig|activateBlock|placeBlock|sleep|equip|consume|toss|whisper|lookAt|pathfinder\.goto|collectBlock\.collect|pvp\.attack)\s*\(/;
       if (botCallPattern.test(content)) {

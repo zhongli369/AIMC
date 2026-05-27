@@ -32,6 +32,14 @@ export interface BehaviorConfigFile {
 }
 
 export interface VoiceConfigFile {
+  /** Master voice switch — default off. Set AIMC_VOICE_ENABLED=1 to enable. */
+  voiceEnabled: boolean;
+  /** Path to whisper.cpp binary (optional, probe on startup) */
+  whisperPath?: string;
+  /** Path to whisper model file (optional) */
+  whisperModelPath?: string;
+  /** Edge TTS voice name */
+  ttsVoice?: string;
   pressureSensitivity: number;
   enableVoiceTimingBias: boolean;
 }
@@ -80,6 +88,7 @@ const DEFAULTS: AimcConfig = {
     defend_player: "follow_player",
   },
   voice: {
+    voiceEnabled: false,
     pressureSensitivity: 1.0,
     enableVoiceTimingBias: true,
   },
@@ -167,6 +176,11 @@ export function getFallbackSkill(skillName: string): string {
 
 export function getVoiceConfig(): VoiceConfigFile {
   return getConfig().voice;
+}
+
+/** Master voice switch — config file AND env var must agree. */
+export function isVoiceEnabled(): boolean {
+  return getConfig().voice.voiceEnabled || process.env.AIMC_VOICE_ENABLED === "1";
 }
 
 export function getVoicePressureSensitivity(): number {

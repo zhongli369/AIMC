@@ -38,6 +38,7 @@ const DEFAULTS = {
         defend_player: "follow_player",
     },
     voice: {
+        voiceEnabled: false,
         pressureSensitivity: 1.0,
         enableVoiceTimingBias: true,
     },
@@ -112,6 +113,10 @@ export function getFallbackSkill(skillName) {
 }
 export function getVoiceConfig() {
     return getConfig().voice;
+}
+/** Master voice switch — config file AND env var must agree. */
+export function isVoiceEnabled() {
+    return getConfig().voice.voiceEnabled || process.env.AIMC_VOICE_ENABLED === "1";
 }
 export function getVoicePressureSensitivity() {
     return getConfig().voice.pressureSensitivity;

@@ -144,7 +144,13 @@ export function initPersonality(params = {}) {
             proactive: proactiveEngine,
             tasks: taskPlanner,
         });
-        agentCore.startProactiveLoop(params.proactiveIntervalMs || 5000);
+        const proactiveMs = params.proactiveIntervalMs ?? 5000;
+        if (proactiveMs > 0) {
+            agentCore.startProactiveLoop(proactiveMs);
+        }
+        else {
+            console.log("[AIMC] Proactive loop NOT started — proactiveIntervalMs=0");
+        }
     }
     // Wire memory into social engine
     if (memoryStore && memoryRetriever) {
@@ -331,6 +337,10 @@ function updateBridge() {
         callbackGenerator,
         getRelationship: () => ({ relationship: relationshipEngine, experiences: sharedExperiences, callbacks: callbackGenerator }),
         getProduction: () => ({ profiler, tokenTracker, heuristicEngine, watchdog, recoveryManager }),
+        getBotState: () => globalThis.__botState__ ??
+            globalThis.__RUNTIME_CONTEXT__?.getSnapshot?.()?.bot ??
+            null,
+        getNearbyEntities: () => globalThis.__RUNTIME_CONTEXT__?.getNearbyEntities?.() ?? [],
         uiBridge,
         getUIBridge: () => uiBridge,
     };

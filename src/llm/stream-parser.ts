@@ -125,7 +125,30 @@ export class StreamParser {
         return this.result;
       }
     } catch {
-      // Not valid JSON
+      // Not valid JSON — try repair then speech extraction
+    }
+
+    // Last-resort: attempt to extract speech from malformed buffer
+    console.log(
+      `[LLM-PARSE] failed — bufferSize=${this.buffer.length} rawPreview="${this.buffer.slice(0, 500).replace(/\n/g, " ")}"`
+    );
+
+    const speechOutput = this.extractSpeechFromBuffer();
+    if (speechOutput) {
+      const validation = AgentOutputSchema.safeParse(speechOutput);
+      if (validation.success) {
+        console.log(
+          `[LLM-PARSE] speech-extracted text="${speechOutput.speech?.text?.slice(0, 60)}"`
+        );
+        this.state = "done";
+        this.result = {
+          state: "done",
+          output: validation.data as ValidatedAgentOutput,
+          rawJson: JSON.stringify(speechOutput),
+          earlyTermination: false,
+        };
+        return this.result;
+      }
     }
 
     // Could not extract valid JSON
@@ -170,13 +193,50 @@ export class StreamParser {
     // Strip markdown code fences
     text = this.stripMarkdownFences(text);
 
+    // Strategy 0: Apply repair to the full text BEFORE brace extraction.
+    // This fixes bare-string quotes that would otherwise fool extractBraceObject's
+    // string-detection into swallowing closing braces.
+    const preRepaired = this.repairJson(text);
+    if (preRepaired !== text) {
+      const braceObj = this.extractBraceObject(preRepaired);
+      if (braceObj) {
+        try {
+          const result = JSON.parse(braceObj);
+          console.log(
+            `[LLM-PARSE] pre-repaired — rawPreview="${text.slice(0, 100)}"`
+          );
+          return result;
+        } catch {
+          // Still invalid after pre-repair
+        }
+      }
+      // Also try parsing the whole pre-repaired text directly
+      try {
+        return JSON.parse(preRepaired);
+      } catch {
+        // Still not valid
+      }
+    }
+
     // Strategy 1: Find the outermost { } pair in the stripped text
     const braceObject = this.extractBraceObject(text);
     if (braceObject) {
       try {
         return JSON.parse(braceObject);
       } catch {
-        // Not valid JSON yet — continue collecting
+        // Try repair
+        const repaired = this.repairJson(braceObject);
+        if (repaired !== braceObject) {
+          try {
+            const result = JSON.parse(repaired);
+            console.log(
+              `[LLM-PARSE] repaired — bareString/ trailingComma — rawPreview="${braceObject.slice(0, 100)}"`
+            );
+            return result;
+          } catch {
+            // Repair didn't help
+          }
+        }
       }
     }
 
@@ -193,7 +253,15 @@ export class StreamParser {
       try {
         return JSON.parse(raw);
       } catch {
-        // Not valid
+        // Try repair on raw buffer
+        const repairedRaw = this.repairJson(raw);
+        if (repairedRaw !== raw) {
+          try {
+            return JSON.parse(repairedRaw);
+          } catch {
+            // Repair didn't help
+          }
+        }
       }
     }
 
@@ -261,6 +329,114 @@ export class StreamParser {
     result = result.replace(fenceEnd, "");
 
     return result.trim();
+  }
+
+  // ─── JSON Repair (conservative) ──────────────────────
+
+  /**
+   * Apply conservative repairs to malformed LLM JSON output.
+   * Only fixes structural issues — never changes semantic content.
+   * Safe: repairs only enable JSON.parse to succeed; Zod still validates.
+   */
+  private repairJson(text: string): string {
+    let repaired = text;
+
+    // Fix 0: missing colon/closing-quote between known key and quoted value.
+    // Handles two LLM malformation patterns:
+    //   "text" "你好"  → "text": "你好"   (key properly closed, missing colon)
+    //   "text "你好"   → "text": "你好"   (key missing closing quote, replaced by space)
+    const knownFields = [
+      "intent", "speech", "text", "tone", "mood", "type", "name",
+      "reason", "target", "actions", "internal_state",
+    ];
+    const missingColonRe = new RegExp(
+      `"(${knownFields.join("|")})"?(\\s+)(")`,
+      "g",
+    );
+    repaired = repaired.replace(missingColonRe, '"$1":$2$3');
+
+    // Fix 1: missing opening quote for bare string values
+    // "intent":chat" → "intent":"chat"
+    // Matches: colon/comma, optional space, bare word, closing quote
+    const bareStringPattern = /([:,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(")/g;
+    repaired = repaired.replace(
+      bareStringPattern,
+      (_full: string, prefix: string, word: string, closeQuote: string) => {
+        if (word === "true" || word === "false" || word === "null") return _full;
+        if (/^\d/.test(word)) return _full;
+        return `${prefix}"${word}${closeQuote}`;
+      },
+    );
+
+    // Fix 2: remove orphan quote after a properly-quoted value end
+    // "friendly"}" → "friendly"}  (hallucinated extra quote after structural char)
+    repaired = repaired.replace(
+      /([a-zA-Z0-9_]"\s*[}\]])(")/g,
+      (_full: string, before: string, _orphan: string) => before,
+    );
+
+    // Fix 3: trailing comma before } or ]
+    repaired = repaired.replace(/,(\s*)([}\]])/g, "$1$2");
+
+    return repaired;
+  }
+
+  /**
+   * Extract a speech-only ValidatedAgentOutput from raw LLM text buffer.
+   * Used as a last resort when JSON repair also fails.
+   * Returns null if no recognizable speech text is found.
+   */
+  private extractSpeechFromBuffer(): ValidatedAgentOutput | null {
+    const raw = this.buffer;
+
+    // Try to find "text": "..." or "text "..." (missing colon) in the raw buffer
+    const textMatch = raw.match(/"text"\s*:?\s*"((?:[^"\\]|\\.)*)"/);
+    if (textMatch && textMatch[1].trim()) {
+      const extracted = textMatch[1]
+        .replace(/\\"/g, '"')
+        .replace(/\\n/g, " ")
+        .trim()
+        .slice(0, 200);
+
+      if (extracted.length >= 2) {
+        return {
+          intent: "chat",
+          speech: { text: extracted, tone: "neutral" },
+          actions: [],
+          internal_state: { mood: "neutral", confidence: 0.3, energy: 0.5 },
+        };
+      }
+    }
+
+    // Fallback: extract CJK sentences, strip JSON field-name noise.
+    // Only trigger when the text contains CJK characters.
+    const cjkChars = raw.match(/[\p{Script=Han}]/gu);
+    if (!cjkChars || cjkChars.length < 2) return null;
+
+    // Strip known JSON field names and structural noise
+    const fieldNoise = /\b(intent|speech|text|tone|mood|type|name|reason|target|actions|internal_state|confidence|energy|friendly|neutral|excited|happy|chat|id|playerName)\b\s*:?\s*/gi;
+    let cleaned = raw
+      .replace(fieldNoise, " ")
+      .replace(/[{}[\]"'",:]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    // Extract CJK text spans
+    const cjkSpans = cleaned.match(/[\p{Script=Han}\p{P}\s]+/gu);
+    if (cjkSpans) {
+      cleaned = cjkSpans.join(" ").replace(/\s+/g, " ").trim().slice(0, 200);
+    }
+
+    if (cleaned.length >= 4) {
+      return {
+        intent: "chat",
+        speech: { text: cleaned, tone: "neutral" },
+        actions: [],
+        internal_state: { mood: "neutral", confidence: 0.2, energy: 0.5 },
+      };
+    }
+
+    return null;
   }
 
   // ─── Malformed Detection ────────────────────────────

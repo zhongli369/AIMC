@@ -129,6 +129,10 @@ export class AgentCore {
   private proactiveEngine: ProactiveEngine | null = null;
   private taskPlanner: TaskPlanner | null = null;
   private proactiveTimer: ReturnType<typeof setInterval> | null = null;
+  private proactiveRunning = false;
+  private proactiveIntervalMs = 5000;
+  // Phase 5B: user interaction tracking for proactive gating
+  private lastUserInteraction = 0;
 
   // Phase 2.5: SkillRouter — REQUIRED for execution
   private skillRouter: SkillRouter | null = null;
@@ -271,6 +275,7 @@ export class AgentCore {
   /** Start the proactive behavior loop. */
   startProactiveLoop(intervalMs: number = 5000): void {
     if (this.proactiveTimer) return;
+    this.proactiveIntervalMs = intervalMs;
     this.proactiveTimer = setInterval(() => this.proactiveTick(), intervalMs);
     console.log(`[AgentCore] Proactive loop started — ${intervalMs}ms interval`);
   }
@@ -1112,17 +1117,40 @@ export class AgentCore {
     return this.state === "thinking" || this.state === "executing";
   }
 
+  /** Record a user interaction timestamp — gates proactive ticks (Phase 5B). */
+  recordUserInteraction(): void {
+    this.lastUserInteraction = Date.now();
+  }
+
   // ─── Phase 6: Proactive Loop ──────────────────────
 
   /**
    * Periodic proactive evaluation — generates autonomous intents
    * based on personality, emotion, and current game state.
    * ALL proactive actions route through RuntimeCore.validate() → SkillRouter.route().
+   *
+   * Phase 5B skip rules (user interaction always wins):
+   *   1. Agent busy thinking/executing → skip
+   *   2. Previous proactive tick still running → skip
+   *   3. User interaction within last 15s → skip
    */
   private async proactiveTick(): Promise<void> {
     if (!this.proactiveEngine || !this.personalityEngine) return;
-    if (this.isBusy()) return;
+    if (this.isBusy()) {
+      console.log("[PROACTIVE] skipped reason=agent_busy");
+      return;
+    }
+    if (this.proactiveRunning) {
+      console.log("[PROACTIVE] skipped reason=previous_tick_running");
+      return;
+    }
+    const sinceUser = Date.now() - this.lastUserInteraction;
+    if (sinceUser < 15000) {
+      console.log(`[PROACTIVE] skipped reason=recent_user_interaction since=${sinceUser}ms`);
+      return;
+    }
 
+    this.proactiveRunning = true;
     try {
       const bridge = (globalThis as any).__aimc__;
       const botState = bridge?.getBotState?.() || null;
@@ -1134,14 +1162,35 @@ export class AgentCore {
       if (intents.length === 0) return;
 
       for (const intent of intents) {
+        // Re-check skip conditions between intents
+        if (Date.now() - this.lastUserInteraction < 15000) {
+          console.log("[PROACTIVE] skipped mid-tick reason=user_interaction_arrived");
+          break;
+        }
         if (intent.requireLLM) {
-          await this.think({
-            botState: null,
-            chatMessage: {
-              source: "proactive_engine",
-              message: `[PROACTIVE] ${intent.reason}. Suggested action: ${intent.actionType}.`,
-            },
-          });
+          // Proactive LLM calls get a shorter timeout (15s) — no user-visible fallback
+          const PROACTIVE_LLM_TIMEOUT_MS = 15000;
+          try {
+            await Promise.race([
+              this.think({
+                botState: null,
+                chatMessage: {
+                  source: "proactive_engine",
+                  message: `[PROACTIVE] ${intent.reason}. Suggested action: ${intent.actionType}.`,
+                },
+              }),
+              new Promise<never>((_, reject) => setTimeout(() => {
+                reject(new Error(`PROACTIVE_TIMEOUT_${PROACTIVE_LLM_TIMEOUT_MS}ms`));
+              }, PROACTIVE_LLM_TIMEOUT_MS)),
+            ]);
+          } catch (err) {
+            if ((err as Error).message?.startsWith("PROACTIVE_TIMEOUT")) {
+              console.log(`[PROACTIVE] timeout after ${PROACTIVE_LLM_TIMEOUT_MS}ms — skipped`);
+              this.cancelActiveRequest();
+            } else {
+              console.warn("[PROACTIVE] think failed:", (err as Error).message);
+            }
+          }
         } else {
           // Build AgentOutput for proactive intent → validate → route
           const output: AgentOutput = {
@@ -1166,6 +1215,8 @@ export class AgentCore {
       }
     } catch (err) {
       console.warn("[AgentCore] Proactive tick failed:", (err as Error).message);
+    } finally {
+      this.proactiveRunning = false;
     }
   }
 

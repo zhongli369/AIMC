@@ -23,6 +23,14 @@ export interface BehaviorConfigFile {
     preferExploreInSafeMode: boolean;
 }
 export interface VoiceConfigFile {
+    /** Master voice switch — default off. Set AIMC_VOICE_ENABLED=1 to enable. */
+    voiceEnabled: boolean;
+    /** Path to whisper.cpp binary (optional, probe on startup) */
+    whisperPath?: string;
+    /** Path to whisper model file (optional) */
+    whisperModelPath?: string;
+    /** Edge TTS voice name */
+    ttsVoice?: string;
     pressureSensitivity: number;
     enableVoiceTimingBias: boolean;
 }
@@ -51,6 +59,8 @@ export declare function getFallbackMap(): Record<string, string>;
 /** Get fallback skill for a given skill name. Returns "explore_area" if not found. */
 export declare function getFallbackSkill(skillName: string): string;
 export declare function getVoiceConfig(): VoiceConfigFile;
+/** Master voice switch — config file AND env var must agree. */
+export declare function isVoiceEnabled(): boolean;
 export declare function getVoicePressureSensitivity(): number;
 export declare function isVoiceTimingEnabled(): boolean;
 export declare function getArbitrationConfig(): ArbitrationConfigFile;

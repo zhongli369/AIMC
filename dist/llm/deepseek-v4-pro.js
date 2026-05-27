@@ -13,7 +13,7 @@ import { StreamParser } from "./stream-parser.js";
 const DEFAULT_CONFIG = {
     baseUrl: "https://api.deepseek.com/v1",
     model: "deepseek-chat",
-    timeoutMs: 6000,
+    timeoutMs: 15000,
     maxRetries: 2,
     temperature: 0.3,
     maxTokens: 1024,
@@ -21,6 +21,7 @@ const DEFAULT_CONFIG = {
 // ─── Fallback Idle Intent ────────────────────────────
 export const FALLBACK_IDLE_OUTPUT = {
     intent: "chat",
+    speech: { text: "嗯…让我想想。", tone: "neutral" },
     actions: [
         {
             id: "fallback-idle",
@@ -143,7 +144,7 @@ export class DeepSeekV4Pro {
                     stream: true,
                     temperature: this.config.temperature,
                     max_tokens: this.config.maxTokens,
-                    response_format: { type: "json_object" },
+                    ...(this.config.supportsJsonFormat !== false ? { response_format: { type: "json_object" } } : {}),
                 }),
                 signal: this.abortController.signal,
             });

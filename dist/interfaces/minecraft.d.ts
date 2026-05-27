@@ -2,11 +2,12 @@
  * Minecraft/Mineflayer abstraction types.
  */
 import type { Bot } from "mineflayer";
-export interface BotRef extends Bot {
+export interface BotRef extends Omit<Bot, "pathfinder"> {
     pathfinder: {
         goto: (goal: unknown) => Promise<void>;
         stop: () => void;
-        goals: Record<string, new (...args: any[]) => unknown>;
+        setMovements: (movements: unknown) => void;
+        setGoal: (goal: unknown, dynamic?: boolean) => void;
     };
     pvp: {
         attack: (entity: unknown) => void;

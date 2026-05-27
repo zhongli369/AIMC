@@ -27,12 +27,14 @@ export interface DeepSeekConfig {
   temperature: number;
   /** Max output tokens */
   maxTokens: number;
+  /** Whether the provider supports response_format json_object (default true) */
+  supportsJsonFormat?: boolean;
 }
 
 const DEFAULT_CONFIG: Partial<DeepSeekConfig> = {
   baseUrl: "https://api.deepseek.com/v1",
   model: "deepseek-chat",
-  timeoutMs: 6000,
+  timeoutMs: 15000,
   maxRetries: 2,
   temperature: 0.3,
   maxTokens: 1024,
@@ -56,6 +58,7 @@ export interface DeepSeekResult {
 
 export const FALLBACK_IDLE_OUTPUT: ValidatedAgentOutput = {
   intent: "chat",
+  speech: { text: "嗯…让我想想。", tone: "neutral" },
   actions: [
     {
       id: "fallback-idle",
@@ -209,7 +212,7 @@ export class DeepSeekV4Pro {
             stream: true,
             temperature: this.config.temperature,
             max_tokens: this.config.maxTokens,
-            response_format: { type: "json_object" },
+            ...(this.config.supportsJsonFormat !== false ? { response_format: { type: "json_object" } } : {}),
           }),
           signal: this.abortController!.signal,
         },
