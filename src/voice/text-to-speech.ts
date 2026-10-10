@@ -3,7 +3,7 @@
  *
  * Converts AI output → spoken audio with narration templates.
  *
- * Trigger points:
+ * Trigger points (designed, not yet wired):
  *   - Chat response (AgentCore → speech text)
  *   - Skill execution result (start/complete/fail narration)
  *   - Fallback event (skill switched)
@@ -14,6 +14,11 @@
  *   - Route skills
  *   - Modify the execution chain
  *   - Access bot state directly
+ *
+ * FUTURE: wire into bridge.speakTTS() when narration templates are needed.
+ * The bridge currently passes raw LLM speech text directly to speakTTS().
+ * This adapter will be useful when we want the bot to narrate its own
+ * skill execution, fallback switching, and critical alerts in its voice.
  */
 import { voiceBridge, type VoiceOutputEvent } from "./voice-event-bus.js";
 import type { NarrationCategory } from "./voice-state.js";

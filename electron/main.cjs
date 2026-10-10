@@ -18,6 +18,44 @@ const path = require("path");
 const fs = require("fs");
 const { spawn } = require("child_process");
 
+// ═══ .env loader (secrets stay OUT of source control) ═══
+// Reads a gitignored `.env` file so double-click launch still works
+// without hardcoding credentials. Real environment variables always win.
+function loadDotEnv() {
+  const candidates = [
+    path.join(process.cwd(), ".env"),
+    path.join(__dirname, "..", ".env"),
+  ];
+  for (const file of candidates) {
+    if (!fs.existsSync(file)) continue;
+    try {
+      const content = fs.readFileSync(file, "utf-8");
+      for (const rawLine of content.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith("#")) continue;
+        const eq = line.indexOf("=");
+        if (eq === -1) continue;
+        const key = line.slice(0, eq).trim();
+        let value = line.slice(eq + 1).trim();
+        if (
+          (value.startsWith('"') && value.endsWith('"')) ||
+          (value.startsWith("'") && value.endsWith("'"))
+        ) {
+          value = value.slice(1, -1);
+        }
+        if (key && process.env[key] === undefined) {
+          process.env[key] = value;
+        }
+      }
+      console.log(`[main.cjs] loaded env from ${file}`);
+      return;
+    } catch (err) {
+      console.error(`[main.cjs] failed to load ${file}:`, err.message);
+    }
+  }
+}
+loadDotEnv();
+
 // ═══════════════════════════════════════════════════════════════
 // BOT MODE — runs before any Electron app initialization
 // When AIMC_BOT_MODE=1, directly execute the bridge script as a
@@ -52,6 +90,24 @@ const {
   buildBotElectronFlags,
 } = require("./launcher-resolver.cjs");
 const { BotProcessManager } = require("./bot-process-manager.cjs");
+
+// ── Default env vars for double-click launch (no shell needed) ───
+// These are set in the Launcher process so voice/TTS work in the UI.
+// They are also forwarded to the bot process via startBot().
+(function applyDefaults() {
+  const DEFAULTS = {
+    AIMC_TTS_ENABLED: "1",
+    AIMC_TTS_PROVIDER: "doubao",
+    // DOUBAO_TTS_* credentials are NOT hardcoded — load from `.env` or system env.
+    // See `.env.example`. The bridge disables TTS gracefully when they are absent.
+    AIMC_VOICE_ENABLED: "1",
+    AIMC_WHISPER_LANGUAGE: "zh",
+    AIMC_WHISPER_MODEL: "tiny",
+  };
+  for (const [k, v] of Object.entries(DEFAULTS)) {
+    if (!process.env[k]) process.env[k] = v;
+  }
+})();
 
 // ─── Paths ──────────────────────────────────────────────────
 
@@ -481,6 +537,16 @@ function startBot(config) {
   console.log("  SETTINGS_JSON:", settingsJson);
   console.log("  apiKeyEnvVar:", apiKeyVar, "=", config.apiKey ? "present" : "MISSING");
 
+  // ── Passthrough env vars ──────────────────────────
+  // Forward all AIMC_* / DOUBAO_* / ARK_* / VOLCENGINE_* to bot process.
+  // These control TTS, voice, model routing, and other runtime features.
+  const passthroughEnv = {};
+  for (const key of Object.keys(process.env)) {
+    if (key.startsWith("AIMC_") || key.startsWith("DOUBAO_") || key.startsWith("ARK_") || key.startsWith("VOLCENGINE_")) {
+      passthroughEnv[key] = process.env[key];
+    }
+  }
+
   // ── Spawn via BotProcessManager ───────────────────
   // BotProcessManager emits its own "status" events — do NOT duplicate them here.
   const result = botManager.start({
@@ -489,6 +555,16 @@ function startBot(config) {
     cwd: validation.cwd,
     electronFlags,
     env: {
+      // ── TTS/Voice defaults (double-click launch, no shell needed) ──
+      // DOUBAO_TTS_* credentials are NOT hardcoded — forwarded via passthroughEnv
+      // (from `.env` or system env) only. TTS disables gracefully when absent.
+      AIMC_TTS_ENABLED: "1",
+      AIMC_TTS_PROVIDER: "doubao",
+      AIMC_VOICE_ENABLED: "1",
+      AIMC_WHISPER_LANGUAGE: "zh",
+      AIMC_WHISPER_MODEL: "tiny",
+      // Passthrough env vars (overrides defaults when set in shell)
+      ...passthroughEnv,
       PROFILES: JSON.stringify([TEMP_PROFILE_PATH]),
       SETTINGS_JSON: settingsJson,
       [apiKeyVar]: config.apiKey,

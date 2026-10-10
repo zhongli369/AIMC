@@ -64,6 +64,47 @@ const runtime = require("./runtime/bot-runtime-manager.cjs");
 runtime.crashGuard();
 runtime.keepAlive();
 
+// ═══ Top-level error boundary (second layer, in bridge itself) ═══
+// Registered here so the bridge survives even if the runtime manager
+// or its crashGuard fails to load. MUST NEVER call process.exit().
+
+process.on("uncaughtException", (err) => {
+  const ts = new Date().toISOString();
+  console.error(`[BRIDGE] ⚡ UNCAUGHT EXCEPTION at ${ts}:`, err.message);
+  console.error(err.stack);
+  process.stderr.write(`AIMC_FATAL:uncaughtException ${ts} ${err.message}\n`);
+  console.error("[BRIDGE] AIMC still alive, phase=recovering");
+});
+
+process.on("unhandledRejection", (reason) => {
+  const ts = new Date().toISOString();
+  const msg = reason instanceof Error ? reason.message : String(reason);
+  const stack = reason instanceof Error ? reason.stack : "(no stack)";
+  console.error(`[BRIDGE] ⚡ UNHANDLED REJECTION at ${ts}:`, msg);
+  console.error(stack);
+  process.stderr.write(`AIMC_FATAL:unhandledRejection ${ts} ${msg}\n`);
+  console.error("[BRIDGE] AIMC still alive, phase=recovering");
+});
+
+// ═══ Standalone heartbeat (30s, always alive even when runtime silent) ═══
+const BRIDGE_START_TIME = Date.now();
+setInterval(() => {
+  const uptime = Math.round((Date.now() - BRIDGE_START_TIME) / 1000);
+  const mem = process.memoryUsage();
+  try {
+    process.stdout.write(
+      `AIMC_MSG:${JSON.stringify({
+        type: "heartbeat",
+        uptime,
+        phase: "running",
+        rss_mb: Math.round(mem.rss / 1024 / 1024),
+      })}\n`
+    );
+  } catch (_) {
+    // stdout may be closed — ignore
+  }
+}, 30_000).unref();  // .unref() so this timer alone does not prevent clean shutdown
+
 // ── Phase 4A: Resume stdin + register listeners IMMEDIATELY.
 //    If we wait until bootstrap completes (~6s), Windows closes the pipe.
 process.stdin.resume();
@@ -412,22 +453,32 @@ function initVoiceIfEnabled(whisperPath, modelPath) {
     return;
   }
 
-  const fs = require("fs");
-  if (whisperPath && fs.existsSync(whisperPath)) {
-    voiceWhisperAvailable = true;
-    console.log(`[VOICE] whisper found: ${whisperPath}`);
-  } else {
-    console.log(`[VOICE] disabled reason=missing_whisper — path: ${whisperPath || "not configured"}`);
+  if (!modelPath) {
+    console.log("[VOICE] disabled reason=missing_model — model path/name not configured");
     voiceEnabled = false;
     return;
   }
 
-  if (modelPath && fs.existsSync(modelPath)) {
-    console.log(`[VOICE] model found: ${modelPath}`);
+  const fs = require("fs");
+  const isCppModel = modelPath.endsWith(".bin") || modelPath.endsWith(".ggml");
+
+  if (isCppModel) {
+    // whisper.cpp mode — need binary + model file on disk
+    if (!whisperPath || !fs.existsSync(whisperPath)) {
+      console.log(`[VOICE] disabled reason=missing_whisper — path: ${whisperPath || "not configured"}`);
+      voiceEnabled = false;
+      return;
+    }
+    if (!fs.existsSync(modelPath)) {
+      console.log(`[VOICE] disabled reason=missing_model — file not found: ${modelPath}`);
+      voiceEnabled = false;
+      return;
+    }
+    voiceWhisperAvailable = true;
+    console.log(`[VOICE] whisper.cpp ready — binary=${whisperPath} model=${modelPath}`);
   } else {
-    console.log(`[VOICE] disabled reason=missing_model — path: ${modelPath || "not configured"}`);
-    voiceEnabled = false;
-    return;
+    // openai-whisper mode — model name (e.g. "tiny", "base"); checked at transcribe time
+    console.log(`[VOICE] openai-whisper mode — model=${modelPath} (lazy init)`);
   }
 
   voiceInitialized = true;
@@ -612,22 +663,24 @@ async function speakTTS(text) {
     if (provider === "doubao") {
       // ── Doubao TTS ──────────────────────────────
       const { doubaoTTS } = require("./tts-doubao.cjs");
-      const apiKey = process.env.DOUBAO_TTS_API_KEY;
+      const accessKeyId = process.env.DOUBAO_TTS_ACCESS_KEY_ID || "";
+      const secretAccessKey = process.env.DOUBAO_TTS_SECRET_ACCESS_KEY || "";
       const appId = process.env.DOUBAO_TTS_APP_ID;
+      const grantToken = process.env.DOUBAO_TTS_API_KEY || "";    // body.app.token
       const voice = process.env.DOUBAO_TTS_VOICE || "zh_female_qingxin";
       const format = process.env.DOUBAO_TTS_FORMAT || "mp3";
       const cluster = process.env.DOUBAO_TTS_CLUSTER || "volcano_tts";
-      const accessToken = process.env.DOUBAO_TTS_ACCESS_TOKEN || apiKey;
 
       console.log(`[TTS] speak started provider=doubao text="${cleaned.slice(0, 80)}"`);
 
       const audioBuffer = await doubaoTTS(cleaned, {
-        apiKey,
+        accessKeyId,
+        secretAccessKey,
         appId,
+        apiKey: grantToken,
         voice,
         format,
         cluster,
-        accessToken,
       });
 
       const ext = format === "wav" ? ".wav" : ".mp3";
@@ -1360,7 +1413,7 @@ runtime.bootstrap(async () => {
     try {
       const aimc = await import(pathToFileURL(distIndex).href);
       const isDoubaoProvider = baseUrl.includes("volces.com");
-      agent = aimc.initAgent({ apiKey, model: effectiveModel, baseUrl, supportsJsonFormat: !isDoubaoProvider });
+      agent = aimc.initAgent({ apiKey, model: effectiveModel, baseUrl, supportsJsonFormat: !isDoubaoProvider, maxTokens: 256, timeoutMs: 12000 });
       agentReady = true;
       console.log(`[BRIDGE] ✓ LLM config — model=${effectiveModel} baseUrl=${baseUrl} supportsJsonFormat=${!isDoubaoProvider}`);
 

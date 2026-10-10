@@ -8,7 +8,7 @@ If code and this document conflict, **this document is authority — update it f
 
 ## Canonical Execution Chain (ONLY valid path)
 
-```
+```text
 User Input / Proactive Tick / Voice Input / Team Context
   → AgentCore.think()            ← Sole AI brain
   → RuntimeCore.validate()       ← Zod + SafetyGuard, VALIDATION ONLY
@@ -18,14 +18,12 @@ User Input / Proactive Tick / Voice Input / Team Context
   → Mineflayer Bot
 ```
 
-**No other execution path exists at runtime.**
+No other execution path exists at runtime.
 
----
-
-## Architecture Invariants (NON-NEGOTIABLE)
+## Architecture Invariants
 
 | # | Invariant |
-|---|-----------|
+|---|---|
 | I-1 | Exactly ONE AI brain: `AgentCore` |
 | I-2 | Exactly ONE execution router: `SkillRouter` |
 | I-3 | Exactly ONE bot controller: `ActionDispatcher` |
@@ -37,8 +35,6 @@ User Input / Proactive Tick / Voice Input / Team Context
 | I-9 | Legacy code is dead — only `settings.js` + `mcdata.js` active |
 | I-10 | All new code is TypeScript strict mode |
 
----
-
 ## Self-Audit (before ANY code change — any YES = REJECT)
 
 1. Does this introduce a second execution path?
@@ -49,8 +45,6 @@ User Input / Proactive Tick / Voice Input / Team Context
 
 Secondary: new globalThis → document. New skill → register in SkillRegistry. AgentOutput schema change → update RuntimeCore validation first.
 
----
-
 ## Forbidden
 
 - New AI loops, execution pipelines, parallel agent systems
@@ -59,25 +53,6 @@ Secondary: new globalThis → document. New skill → register in SkillRegistry.
 - `RuntimeCore` execution logic
 - Legacy code reactivation
 - Independent state evolution
-
----
-
-## Execution Security
-
-| Layer | Guardian | Mechanism |
-|-------|----------|-----------|
-| Build guard | `scripts/arch-guard-scan.cjs` | 5 rules static analysis |
-| Build drift | `scripts/arch-drift-scan.cjs` | 15 rules, 4 groups |
-| Bootstrap | `legacy-bridge.cjs` | Sets `__AIMC_ARCH_LOCK__` v2.8-frozen |
-| Caller gate | `SkillRouter` | Sets token → dispatch → verifyCaller() → clears token |
-
----
-
-## Skill System
-
-8 core skills. Retry: max 2, 100→300→600ms backoff. Fallback: max 2-hop chain. Skills execute ONLY through `SkillRouter.route()`, NEVER call `ActionDispatcher` or `bot.*` directly.
-
----
 
 ## Commands
 
@@ -89,23 +64,20 @@ npm run dev         # tsc && node dist/index.js
 npm run electron    # Launch Electron launcher (dev mode)
 ```
 
-Package release: `npx electron-builder --dir`
+## Voice / TTS Boundary
 
----
+- TTS failure never blocks bot chat or action execution.
+- `DOUBAO_API_KEY` (LLM/ARK) ≠ `DOUBAO_TTS_API_KEY` (TTS).
+- Store credentials only in environment variables, never source files.
 
-## Critical Rules
+## External Harness Routing (on demand only)
 
-1. **AgentCore** is the ONLY AI decision system.
-2. **SkillRouter** is the ONLY behavior entry point.
-3. **ActionDispatcher** is the ONLY entry to Mineflayer — token-gated.
-4. **RuntimeCore** is VALIDATION-ONLY.
-5. **RuntimeContext** is the ONLY state source.
-6. Execution: `AgentCore → RuntimeCore.validate → SkillRouter.route → ActionDispatcher.dispatch → Mineflayer`.
-7. **Soft layers are PASSIVE ONLY** — context/weight/timing influence, never execute.
-8. **Skills NEVER** bypass ActionDispatcher or access `bot.*` directly.
-9. **Legacy code is DEAD** — only `settings.js` + `mcdata.js` active.
-10. **`__AIMC_ARCH_LOCK__` v2.8-frozen** — immutable, strictMode=true.
-11. **Build fails** on arch-guard-scan or arch-drift-scan violations.
-12. **CLAUDE.md IS AUTHORITY** — code/doc conflict → update doc first or reject code.
-13. **Architecture invariants I-1 through I-10** are non-negotiable.
-14. **Observability is PURE SINK** — non-blocking, never-throws, no feedback loop.
+Three-layer harness is stable; entry commands use absolute paths and work from any dir.
+
+| Need | Route | Entry command |
+|---|---|---|
+| Planning / AC / risk / execution prompt | CodeLike | `python F:\Claude\ClaudeCodeProject\Codex-likePlanningKernel\brain\cli.py plan "requirement" --json` |
+| Governed multi-step execution / evidence | WorkFlow | `python F:\Claude\ClaudeCodeProject\WorkFlow\__main__.py pipeline --from-delivery-success --with-post-approval` |
+| Architecture / security / complexity governance | SystemKernel | `python F:\Claude\SystemKernel\v3\cli\systemkernel.py v4 status` |
+
+Default: do not load long SystemKernel / CodeLike / WorkFlow histories; call the entry command, use the result in this project. AIMC architecture rules above remain local authority.
